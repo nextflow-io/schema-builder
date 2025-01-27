@@ -1,0 +1,18 @@
+{
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Test Schema",
+        "type": "object",
+        "$defs": {
+            "test_group": {
+                "type": "object",
+                "properties": {
+                    "test_param": {"type": "string"}
+                }
+            }
+        },
+        "allOf": [
+            {
+                "$ref": "#/$defs/test_group"
+            }
+        ]
+    }

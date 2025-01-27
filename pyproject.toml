@@ -1,0 +1,86 @@
+[project]
+name = "nf-schema-builder"
+version = "0.1.0"
+description = "A CLI tool to build JSON schemas for Nextflow."
+authors = []
+dependencies = [
+    "typer>=0.15.1",
+    "rich>=13.9.4",
+    "pyyaml>=6.0.1",
+    "jsonschema>=4.20.0",
+]
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9.2",
+    "pyright>=1.1.350",
+    "types-jsonschema>=4.20.0",
+    "types-PyYAML>=6.0.1",
+    "pre-commit>=3.5.0",
+]
+
+[project.scripts]
+nf-schema-builder = "nf_schema_builder.cli:app"
+nfsb = "nf_schema_builder.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "N",  # pep8-naming
+    "UP", # pyupgrade
+    "D",  # pydocstyle
+]
+ignore = [
+    "D203",  # 1 blank line required between summary line and description
+    "D212",  # Multi-line docstring summary should start at the first line
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pyright]
+include = ["."]
+exclude = ["**/node_modules", "**/__pycache__"]
+typeCheckingMode = "basic"
+useLibraryCodeForTypes = true
+reportMissingImports = true
+reportMissingTypeStubs = false
+pythonVersion = "3.9"
+strictListInference = true
+strictDictionaryInference = true
+strictParameterNullCheck = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=nf_schema_builder --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["nf_schema_builder"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "pass",
+]

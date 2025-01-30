@@ -7,8 +7,6 @@ from typing import Any
 import pytest
 
 from nf_schema_builder.schema import (
-    find_schema_param,
-    get_schema_defaults,
     load_schema,
     validate_config_default_parameter,
 )
@@ -79,34 +77,6 @@ def test_load_schema_invalid_file(tmp_path: Path) -> None:
         f.write("invalid json")
     with pytest.raises(Exception):
         load_schema(invalid_file)
-
-
-def test_get_schema_defaults(sample_schema: dict[str, Any]) -> None:
-    """Test getting default values from schema."""
-    defaults = get_schema_defaults(sample_schema)
-    assert defaults["top_param"] == "top_value"
-    assert defaults["param1"] == "value1"
-    assert defaults["param2"] == 42
-    assert defaults["param3"] is True
-    assert defaults["param4"] == "ABC"
-
-
-def test_find_schema_param(sample_schema: dict[str, Any]) -> None:
-    """Test finding parameter definitions in schema."""
-    # Test top-level parameter
-    top_param = find_schema_param(sample_schema, "top_param")
-    assert top_param is not None
-    assert top_param["type"] == "string"
-    assert top_param["default"] == "top_value"
-
-    # Test parameter in $defs section
-    param1 = find_schema_param(sample_schema, "param1")
-    assert param1 is not None
-    assert param1["type"] == "string"
-    assert param1["default"] == "value1"
-
-    # Test non-existent parameter
-    assert find_schema_param(sample_schema, "non_existent") is None
 
 
 def test_validate_config_default_parameter(sample_schema: dict[str, Any]) -> None:

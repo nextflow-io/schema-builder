@@ -18,8 +18,11 @@ dev = [
     "types-jsonschema>=4.20.0",
     "types-PyYAML>=6.0.1",
     "pre-commit>=3.5.0",
+    "pytest>=8.1.1",
+    "pytest-cov>=4.1.0",
+    "pytest-sugar>=1.0.0",
+    "ipdb>=0.13.13",
 ]
-
 [project.scripts]
 nf-schema-builder = "nf_schema_builder.cli:app"
 nfsb = "nf_schema_builder.cli:app"
@@ -69,6 +72,7 @@ strictParameterNullCheck = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+python_functions = ["test_*"]
 addopts = "-v --cov=nf_schema_builder --cov-report=term-missing"
 
 [tool.coverage.run]

@@ -56,6 +56,7 @@ class SchemaServer:
         self.websockets: set[web.WebSocketResponse] = set()
         self.ready = threading.Event()
         self.schema_saved = threading.Event()
+        self.finished = threading.Event()
         self.setup_routes()
 
     def setup_routes(self):
@@ -145,6 +146,11 @@ class SchemaServer:
                             except Exception as e:
                                 log.error(f"Error saving schema: {e}")
                                 await ws.send_json({"status": "error", "message": str(e)})
+                        elif data.get("type") == "finish":
+                            log.info("Received finish command")
+                            self.finished.set()
+                            await ws.close()
+                            break
                         elif data.get("type") == "get_schema":
                             try:
                                 if self.schema_file.exists():
@@ -159,8 +165,6 @@ class SchemaServer:
                             except Exception as e:
                                 log.error(f"Error sending schema: {e}")
                                 await ws.send_json({"status": "error", "message": str(e)})
-                        elif data.get("type") == "close":
-                            break
                     except json.JSONDecodeError:
                         log.error("Invalid JSON data received")
                         await ws.send_json({"status": "error", "message": "Invalid JSON data"})
@@ -185,7 +189,7 @@ class SchemaServer:
         log.info(f"Server started at http://{self.host}:{self.port}")
 
         try:
-            while not self.schema_saved.is_set():
+            while not self.finished.is_set():
                 await asyncio.sleep(1)
         finally:
             await runner.cleanup()
@@ -328,24 +332,24 @@ def ensure_server_running(
         return False
 
 
-def wait_for_schema_save() -> bool:
+def wait_for_edit_finish() -> bool:
     """
-    Wait for schema to be saved by the GUI.
+    Wait for the edit to be finished by the GUI.
 
     Returns:
-        bool: True if schema was saved successfully, False otherwise
+        bool: True if the edit was finished successfully, False otherwise
 
     """
     global _server_instance
     if _server_instance is None:
         return False
-    while not _server_instance.schema_saved.is_set():
+    while not _server_instance.finished.is_set():
         time.sleep(0.5)
-    if _server_instance.schema_saved.is_set():
-        log.info("Schema saved successfully")
+    if _server_instance.finished.is_set():
+        log.info("Edit finished successfully")
         return True
     else:
-        log.info("Waiting for schema to be saved...")
+        log.info("Waiting for edit to be finished...")
         return False
 
 
@@ -404,10 +408,10 @@ def send_schema(schema_file: Path, url: str, timeout: int = 10, no_browser: bool
             log.info(f"✅ Schema sent successfully to {url}")
             log.debug(f"Response: {response_data}")
 
-            # For localhost, wait for schema to be saved
+            # For localhost, wait for edit to be finished
             if "localhost" in url or "127.0.0.1" in url:
-                if not wait_for_schema_save():
-                    log.error("Timed out waiting for schema to be saved")
+                if not wait_for_edit_finish():
+                    log.error("Timed out waiting for edit to be finished")
                     return None
 
             return response_data

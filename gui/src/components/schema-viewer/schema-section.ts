@@ -1,7 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import './property-editor';
-import './property-viewer';
+import './property-field';
+import '../common/markdown-viewer';
+import '../common/fa-icon';
 
 export interface SchemaProperty {
   type: 'string' | 'number' | 'integer' | 'boolean';
@@ -37,6 +38,12 @@ export interface ValidationState {
 export class SchemaSectionElement extends LitElement {
   @property({ type: String })
   name = '';
+
+  @property({ type: String })
+  description = '';
+
+  @property({ type: String })
+  icon = '';
 
   @property({ type: Object })
   section: SchemaSection = {};
@@ -125,21 +132,6 @@ export class SchemaSectionElement extends LitElement {
     }
   `;
 
-  private handleTitleChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    this.dispatchUpdate({
-      ...this.section,
-      title: input.value
-    });
-  }
-
-  private handleDescriptionChange(e: Event) {
-    const input = e.target as HTMLTextAreaElement;
-    this.dispatchUpdate({
-      ...this.section,
-      description: input.value
-    });
-  }
 
   private dispatchUpdate(section: SchemaSection) {
     const event = new CustomEvent('section-update', {
@@ -177,47 +169,48 @@ export class SchemaSectionElement extends LitElement {
     });
   }
 
-  render() {
-    if (this.name === 'general') {
-      return html`
-        <div class="section">
-          <div class="section-header">
-            <h2 class="section-title">General Settings</h2>
-          </div>
+  private handleNameUpdate(oldName: string, newName: string) {
+    if (oldName === newName) return;
 
-          <div class="form-group">
-            <label for="title">Schema Title</label>
-            <input
-              type="text"
-              id="title"
-              .value=${this.section.title || ''}
-              @input=${this.handleTitleChange}
-              placeholder="Enter schema title"
-            >
-          </div>
+    // Create new properties object maintaining order
+    const properties: Record<string, SchemaProperty> = {};
+    const entries = Object.entries(this.section.properties || {});
 
-          <div class="form-group">
-            <label for="description">Schema Description</label>
-            <textarea
-              id="description"
-              .value=${this.section.description || ''}
-              @input=${this.handleDescriptionChange}
-              placeholder="Enter schema description"
-            ></textarea>
-          </div>
-        </div>
-      `;
+    for (const [key, value] of entries) {
+      if (key === oldName) {
+        properties[newName] = value;
+      } else {
+        properties[key] = value;
+      }
     }
 
+    // Update required array if the property was required
+    const required = [...(this.section.required || [])];
+    const requiredIndex = required.indexOf(oldName);
+    if (requiredIndex !== -1) {
+      required[requiredIndex] = newName;
+    }
+
+    this.dispatchUpdate({
+      ...this.section,
+      properties,
+      required
+    });
+  }
+
+  render() {
     return html`
       <div class="section">
         <div class="section-header">
-          <h2 class="section-title">${this.name} Parameters</h2>
-        </div>
-
-        <div class="parameters">
+          <h2 class="section-title">
+            <fa-icon icon=${this.icon}></fa-icon>
+            ${this.name} Parameters
+          </h2>
+          <p class="section-description">
+            <markdown-viewer .content=${this.description}></markdown-viewer>
+            </p>
+          <div class="parameters">
           <div class="parameters-header">
-            <h3>Parameters</h3>
             <button class="add-parameter" @click=${this.addParameter}>
               <fa-icon icon="fas fa-plus"></fa-icon> Add Parameter
             </button>
@@ -225,33 +218,30 @@ export class SchemaSectionElement extends LitElement {
 
           <div class="parameter-list">
             ${Object.entries(this.section.properties || {}).map(([name, property]) => html`
-              <property-viewer
+              <property-field
                 .name=${name}
                 .schemaEntry=${property}
-              ></property-viewer>
-              <property-editor
-                .name=${name}
-                .schemaEntry=${property}
+                .required=${(this.section.required || []).includes(name)}
                 .validation=${this.validation[`${this.name}.${name}`] || {}}
                 @property-update=${(e: CustomEvent) => {
-                  const properties = {
-                    ...this.section.properties,
-                    [name]: e.detail.property
-                  };
-                  this.dispatchUpdate({
-                    ...this.section,
-                    properties
-                  });
+                  if (e.detail.name !== name) {
+                    // Handle name change
+                    this.handleNameUpdate(name, e.detail.name);
+                  } else {
+                    // Handle other property updates
+                    const properties = {
+                      ...this.section.properties,
+                      [name]: e.detail.property
+                    };
+                    this.dispatchUpdate({
+                      ...this.section,
+                      properties
+                    });
+                  }
                 }}
-                @property-delete=${() => {
-                  const { [name]: _, ...rest } = this.section.properties || {};
-                  this.dispatchUpdate({
-                    ...this.section,
-                    properties: rest
-                  });
-                }}
-              ></property-editor>
+              ></property-field>
             `)}
+            </div>
           </div>
         </div>
       </div>

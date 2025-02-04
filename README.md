@@ -27,23 +27,9 @@ pre-commit install
 
 ## Usage
 
-The tool can validate JSON or YAML schema files against JSON Schema specifications:
-
 ```bash
-# Validate the default schema file (nextflow_schema.json)
-nf-schema-builder validate
-
-# Validate a specific schema file
-nf-schema-builder validate path/to/schema.json
-
-# Validate a YAML schema file
-nf-schema-builder validate path/to/schema.yaml
+nf-schema-builder send tests/test-schema-full.json
 ```
-
-The validator will:
-- Check if the file is valid JSON/YAML
-- Validate the schema against JSON Schema Draft 2020-12
-- Display basic schema information (title, description, type)
 
 ## Development
 
@@ -53,17 +39,19 @@ This project uses [Ruff](https://github.com/astral-sh/ruff) for linting and form
 
 This project uses:
 - [Ruff](https://github.com/astral-sh/ruff) for linting and formatting
-- [MyPy](https://mypy.readthedocs.io/) for static type checking
+- [pyright](https://github.com/microsoft/pyright) for static type checking
 - [pre-commit](https://pre-commit.com/) for automated checks
 
 ### Setup
 
 1. Install development dependencies:
+
 ```bash
 pip install -e ".[dev]"
 ```
 
 2. Install pre-commit hooks:
+
 ```bash
 pre-commit install
 ```
@@ -77,6 +65,7 @@ pre-commit run --all-files
 ```
 
 To check types:
+
 ```bash
-mypy nf_schema_builder
+pyright nf_schema_builder
 ```

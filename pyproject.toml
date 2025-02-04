@@ -60,7 +60,7 @@ line-ending = "auto"
 
 [tool.pyright]
 include = ["."]
-exclude = ["**/node_modules", "**/__pycache__"]
+exclude = ["**/node_modules", "**/__pycache__", "**/gui/src"]
 typeCheckingMode = "basic"
 useLibraryCodeForTypes = true
 reportMissingImports = true

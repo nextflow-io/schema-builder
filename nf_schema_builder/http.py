@@ -26,9 +26,29 @@ _server_thread = None
 
 
 class SchemaServer:
-    """Serve the schema editor."""
+    """
+    Serve the schema editor.
+
+    A web server that provides a GUI for editing JSON schema files. It handles WebSocket
+    connections for real-time updates and file saving.
+
+    Args:
+        host (str): The hostname to bind the server to
+        port (int): The port number to listen on
+        schema_file (Path, optional): Path to the schema file. Defaults to "nextflow_schema.json"
+
+    """
 
     def __init__(self, host: str, port: int, schema_file: Path = Path("nextflow_schema.json")):
+        """
+        Initialize the SchemaServer.
+
+        Args:
+            host (str): The hostname to bind the server to
+            port (int): The port number to listen on
+            schema_file (Path, optional): Path to the schema file. Defaults to "nextflow_schema.json"
+
+        """
         self.host = host
         self.port = port
         self.schema_file = schema_file
@@ -39,15 +59,33 @@ class SchemaServer:
         self.setup_routes()
 
     def setup_routes(self):
+        """Configure the application routes for the web server."""
         self.app.router.add_post("/schema", self.handle_schema)
         self.app.router.add_get("/ws", self.websocket_handler)
         self.app.router.add_static("/assets/", STATIC_PATH / "assets")
         self.app.router.add_get("/", self.serve_index)
 
     async def serve_index(self, request):
+        """
+        Serve the main index.html file.
+
+        Args:
+            request: The incoming HTTP request
+
+        Returns:
+            FileResponse: The index.html file response
+
+        """
         return web.FileResponse(STATIC_PATH / "index.html")
 
     async def broadcast_schema(self, schema_data):
+        """
+        Broadcast schema updates to all connected WebSocket clients.
+
+        Args:
+            schema_data: The schema data to broadcast
+
+        """
         if not self.websockets:
             return
 
@@ -58,6 +96,16 @@ class SchemaServer:
                 self.websockets.discard(ws)
 
     async def handle_schema(self, request):
+        """
+        Handle incoming schema POST requests.
+
+        Args:
+            request: The incoming HTTP request containing schema data
+
+        Returns:
+            Response: HTTP response indicating success or failure
+
+        """
         try:
             schema_data = await request.json()
             await self.broadcast_schema(schema_data)
@@ -66,6 +114,19 @@ class SchemaServer:
             return web.Response(text=str(e), status=400)
 
     async def websocket_handler(self, request):
+        """
+        Handle WebSocket connections and messages.
+
+        Manages WebSocket lifecycle including connection setup, message handling,
+        and cleanup. Supports schema operations like saving and retrieving.
+
+        Args:
+            request: The incoming WebSocket request
+
+        Returns:
+            WebSocketResponse: The WebSocket response object
+
+        """
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         self.websockets.add(ws)
@@ -110,6 +171,12 @@ class SchemaServer:
         return ws
 
     async def start(self):
+        """
+        Start the web server and wait for schema save.
+
+        Sets up and starts the web server, then waits for a schema save event
+        before cleaning up.
+        """
         runner = web.AppRunner(self.app)
         await runner.setup()
         site = web.TCPSite(runner, self.host, self.port)
@@ -124,12 +191,22 @@ class SchemaServer:
             await runner.cleanup()
 
     def is_ready(self) -> bool:
-        """Check if server is ready."""
+        """
+        Check if server is ready.
+
+        Returns:
+            bool: True if the server is ready and the port is open
+
+        """
         return self.ready.is_set() and is_port_open(self.host, self.port)
 
 
 def cleanup_server():
-    """Cleanup function to be called on exit."""
+    """
+    Cleanup function to be called on exit.
+
+    Cleans up global server instance and thread when the application exits.
+    """
     global _server_instance, _server_thread
     if _server_thread is not None:
         _server_thread = None
@@ -141,7 +218,17 @@ atexit.register(cleanup_server)
 
 
 def is_port_open(host: str, port: int) -> bool:
-    """Check if a port is open on the given host."""
+    """
+    Check if a port is open on the given host.
+
+    Args:
+        host (str): The hostname to check
+        port (int): The port number to check
+
+    Returns:
+        bool: True if the port is open, False otherwise
+
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
             sock.connect((host, port))
@@ -151,7 +238,17 @@ def is_port_open(host: str, port: int) -> bool:
 
 
 def wait_for_server(timeout: int = 10, interval: float = 0.1) -> bool:
-    """Wait for server to be ready."""
+    """
+    Wait for server to be ready.
+
+    Args:
+        timeout (int, optional): Maximum time to wait in seconds. Defaults to 10.
+        interval (float, optional): Time between checks in seconds. Defaults to 0.1.
+
+    Returns:
+        bool: True if server is ready within timeout, False otherwise
+
+    """
     start_time = time.time()
     while time.time() - start_time < timeout:
         # Get current instance to avoid race conditions
@@ -165,7 +262,21 @@ def wait_for_server(timeout: int = 10, interval: float = 0.1) -> bool:
 def ensure_server_running(
     url: str, schema_file: Path = Path("nextflow_schema.json"), timeout: int = 10, no_browser: bool = False
 ) -> bool:
-    """Ensure the schema server is running."""
+    """
+    Ensure the schema server is running.
+
+    Starts the server if it's not already running and optionally opens the browser.
+
+    Args:
+        url (str): The URL where the server should run
+        schema_file (Path, optional): Path to the schema file. Defaults to "nextflow_schema.json".
+        timeout (int, optional): Maximum time to wait for server start in seconds. Defaults to 10.
+        no_browser (bool, optional): If True, don't open browser automatically. Defaults to False.
+
+    Returns:
+        bool: True if server is running successfully, False otherwise
+
+    """
     global _server_instance, _server_thread
 
     if _server_thread is not None and _server_thread.is_alive():
@@ -180,6 +291,7 @@ def ensure_server_running(
     _server_thread = None
 
     def run_server():
+        """Run the server in a separate thread."""
         global _server_instance
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -217,7 +329,13 @@ def ensure_server_running(
 
 
 def wait_for_schema_save() -> bool:
-    """Wait for schema to be saved by the GUI."""
+    """
+    Wait for schema to be saved by the GUI.
+
+    Returns:
+        bool: True if schema was saved successfully, False otherwise
+
+    """
     global _server_instance
     if _server_instance is None:
         return False
@@ -233,7 +351,21 @@ def wait_for_schema_save() -> bool:
 
 @handle_schema_errors
 def send_schema(schema_file: Path, url: str, timeout: int = 10, no_browser: bool = False) -> Optional[str]:
-    """Send schema file to URL."""
+    """
+    Send schema file to URL.
+
+    Sends a JSON schema file to a specified URL, handling both local and remote destinations.
+
+    Args:
+        schema_file (Path): Path to the schema file to send
+        url (str): Destination URL
+        timeout (int, optional): Request timeout in seconds. Defaults to 10.
+        no_browser (bool, optional): If True, don't open browser for local URLs. Defaults to False.
+
+    Returns:
+        Optional[str]: Response data if successful, None if failed
+
+    """
     # Ensure server is running if sending to localhost
     if "localhost" in url or "127.0.0.1" in url:
         if not ensure_server_running(url, schema_file=schema_file, timeout=timeout, no_browser=no_browser):

@@ -8,18 +8,25 @@ repos:
       args: [--fix]
     # Run the formatter.
     - id: ruff-format
-
-repos:
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.392
-    hooks:
-    - id: pyright
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-toml
-      - id: debug-statements
+- repo: https://github.com/RobertCraigie/pyright-python
+  rev: v1.1.392
+  hooks:
+  - id: pyright
+    language: python
+    types_or: [python, pyi]
+    additional_dependencies:
+      - typer>=0.15.1
+      - jsonschema>=4.20.0
+      - types-jsonschema>=4.20.0
+      - rich>=13.9.4
+      - pyyaml>=6.0.1
+      - aiohttp>=3.9.3
+      - pytest >= 8.1.1
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+    - id: trailing-whitespace
+    - id: end-of-file-fixer
+    - id: check-yaml
+    - id: check-toml
+    - id: debug-statements

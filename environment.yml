@@ -17,5 +17,6 @@ dependencies:
   - types-jsonschema>=4.20.0
   - types-PyYAML>=6.0.1
   - pre-commit>=3.5.0
+  - aiohttp>=3.9.3
   - pip:
       - -e .

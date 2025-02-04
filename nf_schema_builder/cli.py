@@ -6,11 +6,11 @@ from typing import Annotated, Optional
 import typer
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from nf_schema_builder.config import ValidationConfig
 from nf_schema_builder.http import send_schema
 from nf_schema_builder.logger import log, set_debug
-from nf_schema_builder.schema import SchemaValidator, load_schema
+from nf_schema_builder.schema import load_schema
 from nf_schema_builder.utils import check_nextflow_installation, handle_schema_errors
-from nf_schema_builder.config import ValidationConfig
 from nf_schema_builder.validation import (
     validate_json_schema,
     validate_workflow_parameters,
@@ -27,7 +27,7 @@ app = typer.Typer(
 def main(
     ctx: typer.Context,
 ) -> None:
-    """Main callback to handle default command."""
+    """Handle default command when no subcommand is provided."""
     if ctx.invoked_subcommand is None:
         ctx.invoke(send)
 
@@ -67,6 +67,13 @@ def send(
             help="Enable debug logging",
         ),
     ] = False,
+    no_browser: Annotated[
+        bool,
+        typer.Option(
+            "--no-browser",
+            help="Don't open a new browser window",
+        ),
+    ] = False,
 ) -> None:
     """Send schema file to URL for visualization or processing."""
     try:
@@ -80,7 +87,7 @@ def send(
         validate(schema_file, debug)
 
         # Send schema
-        response = send_schema(schema_file, url, timeout)
+        response = send_schema(schema_file, url, timeout, no_browser)
         if response:
             log.info(f"✅ Schema sent successfully to {url}")
             if debug:

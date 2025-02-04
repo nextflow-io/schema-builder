@@ -7,13 +7,12 @@ from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
 from subprocess import run
-from typing import Callable, Optional, TypeVar, Union, cast
+from typing import Callable, Optional, TypeVar
 
 import typer
 from jsonschema.exceptions import SchemaError, ValidationError
 
 from nf_schema_builder.logger import log
-
 
 # Type definitions
 T = TypeVar("T")
@@ -149,7 +148,7 @@ def fetch_wf_config(wf_path: Path, cache_config: bool = True) -> ConfigDict:
     """
     if not check_nextflow_installation():
         log.error("Nextflow is not installed")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     log.debug(f"Got '{wf_path}' as path")
 

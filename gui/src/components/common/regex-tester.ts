@@ -4,7 +4,17 @@ import { customElement, property, state } from "lit/decorators.js";
 @customElement("regex-tester")
 export class RegexTester extends LitElement {
   @property({ type: String }) pattern = "";
-  @state() private examples: { text: string; isValid?: boolean }[] = [{ text: "" }];
+  @property({ type: String }) defaultValue = "";
+  @state() private examples: { text: string; isValid?: boolean }[] = [];
+  @state() private defaultValueValid?: boolean;
+
+  connectedCallback() {
+    super.connectedCallback();
+    // Initialize with default value validation
+    this.validateDefaultValue();
+    // Initialize examples with one empty example
+    this.examples = [{ text: "" }];
+  }
 
   static styles = css`
     :host {
@@ -94,6 +104,34 @@ export class RegexTester extends LitElement {
     .remove-example:hover {
       color: var(--error-color, #dc3545);
     }
+
+    .default-value {
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      border-radius: 4px;
+      background: var(--background-dark);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .default-value-label {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .default-value-text {
+      font-family: monospace;
+      color: var(--text-color);
+    }
+
+    .default-value.valid {
+      border-left: 3px solid var(--success-color, #28a745);
+    }
+
+    .default-value.invalid {
+      border-left: 3px solid var(--error-color, #dc3545);
+    }
   `;
 
   private validateExample(example: string): boolean {
@@ -103,6 +141,14 @@ export class RegexTester extends LitElement {
       return regex.test(example);
     } catch (e) {
       return false;
+    }
+  }
+
+  private validateDefaultValue() {
+    if (this.defaultValue && this.pattern) {
+      this.defaultValueValid = this.validateExample(this.defaultValue);
+    } else {
+      this.defaultValueValid = undefined;
     }
   }
 
@@ -121,52 +167,71 @@ export class RegexTester extends LitElement {
   }
 
   protected updated(changedProperties: Map<string, any>) {
-    if (changedProperties.has("pattern")) {
+    if (changedProperties.has("pattern") || changedProperties.has("defaultValue")) {
+      // Revalidate default value when pattern or defaultValue changes
+      this.validateDefaultValue();
       // Revalidate all examples when pattern changes
-      this.examples = this.examples.map((example) => ({
-        ...example,
-        isValid: this.validateExample(example.text),
-      }));
+      if (changedProperties.has("pattern")) {
+        this.examples = this.examples.map((example) => ({
+          ...example,
+          isValid: this.validateExample(example.text),
+        }));
+      }
     }
   }
 
   render() {
     return html`
       <div class="regex-tester">
-        <div class="examples">
-          ${this.examples.map(
-            (example, index) => html`
-              <div class="example-row">
-                <div class="status-icon ${example.text ? (example.isValid ? "valid" : "invalid") : ""}">
-                  ${example.text
-                    ? example.isValid
-                      ? html`<fa-icon icon="fas fa-check"></fa-icon>`
-                      : html`<fa-icon icon="fas fa-times"></fa-icon>`
+        ${this.defaultValue ? html`
+          <div class="default-value ${this.defaultValueValid !== undefined ? (this.defaultValueValid ? 'valid' : 'invalid') : ''}">
+            <div class="status-icon ${this.defaultValueValid !== undefined ? (this.defaultValueValid ? 'valid' : 'invalid') : ''}">
+              ${this.defaultValueValid !== undefined
+                ? this.defaultValueValid
+                  ? html`<fa-icon icon="fas fa-check"></fa-icon>`
+                  : html`<fa-icon icon="fas fa-times"></fa-icon>`
+                : ''}
+            </div>
+            <span class="default-value-label">Default value:</span>
+            <span class="default-value-text">${this.defaultValue}</span>
+          </div>
+        ` : ''}
+        ${this.examples.length > 0 ? html`
+          <div class="examples">
+            ${this.examples.map(
+              (example, index) => html`
+                <div class="example-row">
+                  <div class="status-icon ${example.text ? (example.isValid ? "valid" : "invalid") : ""}">
+                    ${example.text
+                      ? example.isValid
+                        ? html`<fa-icon icon="fas fa-check"></fa-icon>`
+                        : html`<fa-icon icon="fas fa-times"></fa-icon>`
+                      : ""}
+                  </div>
+                  <input
+                    class="example-input ${example.text ? (example.isValid ? "valid" : "invalid") : ""}"
+                    type="text"
+                    .value=${example.text}
+                    placeholder="Test example..."
+                    @input=${(e: Event) => this.handleExampleChange(index, (e.target as HTMLInputElement).value)}
+                  />
+
+                  ${this.examples.length > 1
+                    ? html`
+                        <button class="remove-example" @click=${() => this.removeExample(index)}>
+                          <fa-icon icon="fas fa-trash"></fa-icon>
+                        </button>
+                      `
                     : ""}
                 </div>
-                <input
-                  class="example-input ${example.text ? (example.isValid ? "valid" : "invalid") : ""}"
-                  type="text"
-                  .value=${example.text}
-                  placeholder="Test example..."
-                  @input=${(e: Event) => this.handleExampleChange(index, (e.target as HTMLInputElement).value)}
-                />
-
-                ${this.examples.length > 1
-                  ? html`
-                      <button class="remove-example" @click=${() => this.removeExample(index)}>
-                        <fa-icon icon="fas fa-trash"></fa-icon>
-                      </button>
-                    `
-                  : ""}
-              </div>
-            `
-          )}
-        </div>
-        <button class="add-example" @click=${this.addExample}>
-          <fa-icon icon="fas fa-plus"></fa-icon>
-          Add example
-        </button>
+              `
+            )}
+          </div>
+          <button class="add-example" @click=${this.addExample}>
+            <fa-icon icon="fas fa-plus"></fa-icon>
+            Add example
+          </button>
+        ` : ''}
       </div>
     `;
   }

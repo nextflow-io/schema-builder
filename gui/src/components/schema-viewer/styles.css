@@ -1,0 +1,105 @@
+:host {
+  display: block;
+}
+
+.schema-builder {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 2rem;
+  height: 100vh;
+}
+
+.sidebar {
+  background: var(--background-dark);
+  padding: 1.5rem;
+  border-right: 1px solid var(--border-color);
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  color: var(--text-color);
+}
+
+.header p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.actions {
+  display: grid;
+  gap: 1rem;
+}
+
+.actions button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: opacity 0.3s;
+}
+
+.save-button {
+  background: var(--success-color);
+  color: white;
+}
+
+.finish-button {
+  background: var(--primary-color);
+  color: white;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.main-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.ws-status {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ws-status.connected {
+  background-color: rgb(from var(--success-color) r g b / 0.5);
+  color: var(--text-color);
+}
+
+.ws-status.disconnected {
+  background-color: rgb(from var(--error-color) r g b / 0.5);
+  color: var(--text-color);
+}
+
+.save-status {
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  text-align: center;
+}
+
+.save-status.success {
+  color: var(--success-color);
+}
+
+.save-status.error {
+  color: var(--error-color);
+}
+
+fa-icon {
+  font-size: 1em;
+}

@@ -1,6 +1,5 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
-import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { SchemaProperty } from './schema-section';
 import sanitizeHtml from 'sanitize-html';
 import { marked } from 'marked';
@@ -21,6 +20,8 @@ export class PropertyField extends LitElement {
   @state() private pendingChanges: Partial<SchemaProperty> = {};
   @state() private pendingName: string | null = null;
   @query('input, textarea, select') private inputElement?: HTMLElement;
+  @state() private processedDescription = '';
+  @state() private processedHelpText = '';
 
   private handleGlobalEscape = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -84,10 +85,6 @@ export class PropertyField extends LitElement {
       & .markdown {
         width: 100%;
       }
-    }
-
-    .field-wrapper:hover {
-      opacity: 0.8;
     }
 
     .cancel-button {
@@ -283,11 +280,17 @@ export class PropertyField extends LitElement {
       margin: 0;
     }
 
+    .code {
+      font-family: monospace;
+      background: var(--background-light);
+    }
+
     .pattern-editor {
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
       width: 100%;
+      font-family: monospace;
     }
 
     .pattern-editor input {
@@ -321,38 +324,82 @@ export class PropertyField extends LitElement {
       display: flex;
       align-items: center;
     }
+
+    .input-invalid {
+      border-color: var(--error-color) !important;
+    }
+
+    .validation-message {
+      color: var(--error-color);
+      font-size: 0.8rem;
+      margin-top: 0.25rem;
+    }
   `;
 
   private handlePropertyUpdate(field: EditableFields, value: any) {
+    console.log(`Updating property '${this.name}.${field}' to:`, value);
+
+    // Create a clean copy of the schema entry
+    const updatedEntry = JSON.parse(JSON.stringify({
+      ...this.schemaEntry,
+      [field]: value
+    }));
+
+    // Send the update event to the parent
     const event = new CustomEvent('property-update', {
       detail: {
         name: this.name,
-        property: {
-          ...this.schemaEntry,
-          [field]: value
-        }
+        property: updatedEntry
       },
       bubbles: true,
       composed: true
     });
+
+    // Dispatch the event
+    console.log(`Dispatching property-update event for ${this.name}:`, updatedEntry);
     this.dispatchEvent(event);
+
+    // Update local state
+    this.schemaEntry = updatedEntry;
     this.editingField = null;
     this.pendingChanges = {};
+
+    // Force a re-render
+    this.requestUpdate();
   }
 
   private handleNameUpdate(newName: string) {
+    console.log(`Updating property name from '${this.name}' to '${newName}'`);
+
     if (newName === this.name) return;
 
+    // Create a clean copy of the schema entry
+    const property = JSON.parse(JSON.stringify(this.schemaEntry));
+
+    // Send the update event to the parent
     const event = new CustomEvent('property-update', {
       detail: {
         name: newName,
-        property: this.schemaEntry
+        property: property
       },
       bubbles: true,
       composed: true
     });
+
+    // Dispatch the event
+    console.log(`Dispatching name-update event from ${this.name} to ${newName}`);
     this.dispatchEvent(event);
+
+    // Update local state
     this.editingField = null;
+    this.pendingName = null;
+
+    // Schedule a name update after the event has been processed
+    setTimeout(() => {
+      this.name = newName;
+      this.requestUpdate();
+      console.log('Name updated in component to:', this.name);
+    }, 50);
   }
 
   private handleInputChange(field: EditableFields, value: any) {
@@ -387,9 +434,20 @@ export class PropertyField extends LitElement {
     if (changedProperties.has('editingField') && this.editingField) {
       setTimeout(() => this.inputElement?.focus(), 0);
     }
+
+    if (changedProperties.has('name')) {
+      console.log(`Property name changed to: ${this.name}`);
+      this.requestUpdate();
+    }
+
     if (changedProperties.has('schemaEntry')) {
+      console.log('schemaEntry updated:', this.schemaEntry);
       this.processedDescription = await this.parseMarkdown(this.schemaEntry.description);
       this.processedHelpText = await this.parseMarkdown(this.schemaEntry.help_text);
+
+      // Force a complete re-render of the component
+      this.requestUpdate();
+
     }
   }
 
@@ -400,6 +458,16 @@ export class PropertyField extends LitElement {
       }
       e.preventDefault();
       this.saveEdit(field);
+    }
+  }
+
+  private validateAgainstPattern(value: string): boolean {
+    if (!this.schemaEntry.pattern || !value) return true;
+    try {
+      const regex = new RegExp(this.schemaEntry.pattern);
+      return regex.test(value);
+    } catch (e) {
+      return false;
     }
   }
 
@@ -445,21 +513,34 @@ export class PropertyField extends LitElement {
           </select>
         `;
       }
+
+      const isDefaultField = field === 'default';
+      const isInvalid = isDefaultField && this.schemaEntry.type === 'string' &&
+                       !this.validateAgainstPattern(value);
+
       return html`
-        <input
-          autofocus
-          type=${this.schemaEntry.type === 'number' || this.schemaEntry.type === 'integer' || isNumeric ? 'number' : 'text'}
-          .value=${value || ''}
-          @input=${(e: Event) => {
-            const input = e.target as HTMLInputElement;
-            let newValue: string | number = input.value;
-            if (isNumeric && newValue) {
-              newValue = Number(newValue);
-            }
-            this.handleInputChange(field, newValue);
-          }}
-          @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
-        >
+        <div>
+          <input
+            autofocus
+            type=${this.schemaEntry.type === 'number' || this.schemaEntry.type === 'integer' || isNumeric ? 'number' : 'text'}
+            class=${isInvalid ? 'input-invalid' : ''}
+            .value=${value || ''}
+            @input=${(e: Event) => {
+              const input = e.target as HTMLInputElement;
+              let newValue: string | number = input.value;
+              if (isNumeric && newValue) {
+                newValue = Number(newValue);
+              }
+              this.handleInputChange(field, newValue);
+            }}
+            @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
+          >
+          ${isInvalid ? html`
+            <div class="validation-message">
+              Default value does not match pattern: <code>${this.schemaEntry.pattern}</code>
+            </div>
+          ` : ''}
+        </div>
       `;
     }
 
@@ -474,7 +555,10 @@ export class PropertyField extends LitElement {
             @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLInputElement).value)}
             @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
           >
-          <regex-tester .pattern=${value || ''}></regex-tester>
+          <regex-tester
+            .pattern=${value || ''}
+            .defaultValue=${this.schemaEntry.default || ''}
+          ></regex-tester>
         </div>
       `;
     }
@@ -490,8 +574,12 @@ export class PropertyField extends LitElement {
     `;
   }
 
-  private renderField(field: string, content: any, isMarkdown = false) {
+  private renderField(field: string, defaultContent: any, isMarkdown = false) {
     const label = field.replace(/([A-Z])/g, ' $1').toLowerCase();
+    const content = (field in this.schemaEntry && this.schemaEntry[field as keyof SchemaProperty] !== undefined)
+      ? this.schemaEntry[field as keyof SchemaProperty]
+      : defaultContent;
+
     return html`
       <div class="field-group">
         <div class="field-label">${label}</div>
@@ -517,10 +605,12 @@ export class PropertyField extends LitElement {
                 </div>
               `
             : html`
-                <div class="field-content" @click=${() => (this.editingField = field)}>
+                <div class='field-content' @click=${() => (this.editingField = field)}>
                   ${isMarkdown
                     ? html`<markdown-viewer .content=${content}></markdown-viewer>`
-                    : content}
+                    : field === 'pattern'
+                      ? html`<code>${content}</code>`
+                      : content}
                 </div>
               `}
         </div>
@@ -581,8 +671,7 @@ export class PropertyField extends LitElement {
                 <option value="true">true</option>
               </select>
               ${this.renderCancelButton()}
-            `
-            : html`<span class="property-required">${this.required ? 'true' : 'false'}</span>`}
+            `            : html`<span class="property-required">${this.required ? 'true' : 'false'}</span>`}
         </div>
       </div>
     `;
@@ -704,6 +793,7 @@ export class PropertyField extends LitElement {
   }
 
   render() {
+
     const { name, schemaEntry } = this;
     const iconName = schemaEntry.fa_icon || 'fas fa-question-circle';
     const isNumeric = schemaEntry.type === 'number' || schemaEntry.type === 'integer';
@@ -726,7 +816,7 @@ export class PropertyField extends LitElement {
           ? this.renderField('help_text', schemaEntry.help_text, true)
           : this.renderField('help_text', 'Add help text...')}
 
-        ${schemaEntry.default !== undefined ? this.renderField('default', schemaEntry.default) : ''}
+        ${this.renderField('default', schemaEntry.default)}
 
         ${isNumeric ? html`
           ${schemaEntry.minimum !== undefined ? this.renderField('minimum', schemaEntry.minimum) : this.renderField('minimum', 'Add minimum...')}

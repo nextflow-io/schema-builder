@@ -134,10 +134,15 @@ export class SchemaSectionElement extends LitElement {
 
 
   private dispatchUpdate(section: SchemaSection) {
+    console.log(`Dispatching section update for ${this.name}:`, JSON.stringify(section));
+
+    // Ensure we're sending a clean copy without any circular references or reactive properties
+    const cleanSection = JSON.parse(JSON.stringify(section));
+
     const event = new CustomEvent('section-update', {
       detail: {
         name: this.name,
-        section
+        section: cleanSection
       },
       bubbles: true,
       composed: true
@@ -170,6 +175,7 @@ export class SchemaSectionElement extends LitElement {
   }
 
   private handleNameUpdate(oldName: string, newName: string) {
+    console.log(`Updating property name from '${oldName}' to '${newName}'`);
     if (oldName === newName) return;
 
     // Create new properties object maintaining order
@@ -191,11 +197,23 @@ export class SchemaSectionElement extends LitElement {
       required[requiredIndex] = newName;
     }
 
-    this.dispatchUpdate({
+    // Create an updated section
+    const updatedSection = {
       ...this.section,
       properties,
       required
-    });
+    };
+
+    // Dispatch the update
+    console.log('Dispatching section update with renamed property:', updatedSection);
+    this.dispatchUpdate(updatedSection);
+  }
+
+  protected updated(changedProperties: Map<string, any>) {
+    if (changedProperties.has('section')) {
+      console.log(`Section ${this.name} updated:`, this.section);
+      this.requestUpdate();
+    }
   }
 
   render() {
@@ -207,7 +225,7 @@ export class SchemaSectionElement extends LitElement {
             ${this.name} Parameters
           </h2>
           <p class="section-description">
-            <markdown-viewer .content=${this.description}></markdown-viewer>
+            <markdown-viewer .content=${this.description || ''}></markdown-viewer>
             </p>
           <div class="parameters">
           <div class="parameters-header">
@@ -223,6 +241,7 @@ export class SchemaSectionElement extends LitElement {
                 .schemaEntry=${property}
                 .required=${(this.section.required || []).includes(name)}
                 .validation=${this.validation[`${this.name}.${name}`] || {}}
+                key=${name}
                 @property-update=${(e: CustomEvent) => {
                   if (e.detail.name !== name) {
                     // Handle name change

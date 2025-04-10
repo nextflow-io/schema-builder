@@ -9,7 +9,7 @@ interface JsonSchema {
   $defs?: Record<
     string,
     {
-      title?: string;
+      title: string;
       description?: string;
       fa_icon?: string;
       properties: Record<string, any>;
@@ -42,12 +42,16 @@ export class JsonSchemaViewer extends LitElement {
 
   private connectWebSocket() {
     const wsUrl = `ws://localhost:5173/ws`;
+    console.log(`Connecting to WebSocket at ${wsUrl}`);
+
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
+      console.log('WebSocket connection established');
       this.wsStatus = "connected";
       // Request the current schema when connected
       if (this.ws) {
+        console.log('Requesting current schema');
         this.ws.send(
           JSON.stringify({
             type: "get_schema",
@@ -57,21 +61,13 @@ export class JsonSchemaViewer extends LitElement {
     };
 
     this.ws.onclose = () => {
+      console.log('WebSocket connection closed');
       this.wsStatus = "disconnected";
       // Try to reconnect after 5 seconds
       setTimeout(() => this.connectWebSocket(), 5000);
     };
 
-    this.ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (message.type === "schema_update") {
-          this.schema = message.data;
-        }
-      } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
-      }
-    };
+    this.ws.onmessage = this.handleWebSocketMessage;
 
     this.ws.onerror = (error) => {
       console.error("WebSocket error:", error);
@@ -81,45 +77,107 @@ export class JsonSchemaViewer extends LitElement {
 
   private async handleSave() {
     try {
+      // Make sure we have an open WebSocket connection
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        console.log('WebSocket not open, creating new connection');
         this.ws = new WebSocket("ws://localhost:5173/ws");
         await new Promise((resolve, reject) => {
           if (!this.ws) return reject(new Error('No WebSocket'));
           this.ws.onopen = resolve;
           this.ws.onerror = reject;
         });
+        console.log('WebSocket connection established');
       }
 
-      this.ws.send(
-        JSON.stringify({
-          type: "save_schema",
-          data: this.schema,
-        })
-      );
+      // Send the save_schema message
+      const message = {
+        type: "save_schema",
+        data: this.schema,
+      };
+      this.ws.send(JSON.stringify(message));
 
-      return new Promise((resolve, reject) => {
+      // Wait for the response
+      const response = await new Promise<any>((resolve, reject) => {
         if (!this.ws) return reject(new Error('No WebSocket'));
 
-        const handler = (event: MessageEvent) => {
-          const response = JSON.parse(event.data);
-          if (response.status === "success") {
-            this.lastSaveStatus = 'success';
-            console.log("Schema saved successfully");
-            resolve(response);
-          } else {
-            this.lastSaveStatus = 'error';
-            console.error("Failed to save schema:", response.message);
-            reject(new Error(response.message));
+        let timeout: number;
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          if (this.ws) {
+            this.ws.onmessage = this.handleWebSocketMessage.bind(this);
           }
         };
 
+        const handler = (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('Received WebSocket response:', data);
+
+            // Check if this is a response to our save
+            if (data.status !== undefined) {
+              cleanup(); // Clean up before resolving/rejecting
+
+              if (data.status === "success") {
+                resolve(data);
+              } else {
+                reject(new Error(data.message || 'Unknown error'));
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing response:', e);
+            // Don't reject here, as it might be unrelated message
+          }
+        };
+
+        // Install temporary handler
         this.ws.onmessage = handler;
-        this.ws.onerror = reject;
+
+        // Set timeout
+        timeout = setTimeout(() => {
+          cleanup(); // Clean up before rejecting
+          reject(new Error('Timeout waiting for save response'));
+        }, 5000);
+
+        // Add error handler
+        this.ws.onerror = (error) => {
+          cleanup(); // Clean up before rejecting
+          console.error('WebSocket error during save:', error);
+          reject(error);
+        };
       });
+
+      // Handle successful response
+      this.lastSaveStatus = 'success';
+      console.log("Schema saved successfully");
+
+      return response;
     } catch (error) {
       this.lastSaveStatus = 'error';
       console.error("Failed to save schema:", error);
       throw error;
+    }
+  }
+
+  private handleWebSocketMessage = (event: MessageEvent) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === "schema_update") {
+        console.log("Received schema update:", message.data);
+        // Store the previous schema to check for changes
+        const prevSchema = JSON.stringify(this.schema);
+
+        // Update the schema
+        this.schema = message.data;
+
+        // Force a complete re-render if the schema changed
+        if (prevSchema !== JSON.stringify(this.schema)) {
+          console.log("Schema changed, forcing re-render");
+          this.requestUpdate();
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing WebSocket message:", error);
     }
   }
 
@@ -139,19 +197,45 @@ export class JsonSchemaViewer extends LitElement {
   }
 
   private async handleSchemaUpdate(name: string, section: any) {
-    this.schema = {
-      ...this.schema,
-      $defs: {
-        ...this.schema.$defs,
-        [name]: section,
-      },
-    };
-
-    // Auto-save on every change
     try {
+      // Create a clean copy of the current schema to avoid reference issues
+      const currentSchema = JSON.parse(JSON.stringify(this.schema));
+
+      // Find the original key in $defs that matches this section
+      const originalKey = Object.keys(currentSchema.$defs || {}).find(key => {
+        const def = currentSchema.$defs?.[key];
+        return def.title === name || key === name.toLowerCase().replace(/\s+/g, '_');
+      });
+
+      if (!originalKey) {
+        console.error(`Could not find original key for section ${name}`);
+        return;
+      }
+
+      console.log(`Found original key: ${originalKey} for section ${name}`);
+
+      // Create the updated schema using the original key
+      const updatedSchema = {
+        ...currentSchema,
+        $defs: {
+          ...currentSchema.$defs,
+          [originalKey]: {
+            ...section,
+            title: name // Preserve the original title
+          }
+        },
+      };
+
+      // Update the local state
+      this.schema = updatedSchema;
+
+      // Request an update
+      this.requestUpdate();
+
+      // Auto-save on every change
       await this.handleSave();
     } catch (error) {
-      // Error is already logged in handleSave
+      console.error('Error updating schema:', error);
     }
   }
 
@@ -301,8 +385,8 @@ export class JsonSchemaViewer extends LitElement {
                 <div class="schema-section">
                   <schema-section
                     .name=${def.title}
-                    .description=${def.description}
-                    .icon=${def.fa_icon}
+                    .description=${def.description || ''}
+                    .icon=${def.fa_icon || ''}
                     .section=${def}
                     @section-update=${(e: CustomEvent) => this.handleSchemaUpdate(e.detail.name, e.detail.section)}
                   ></schema-section>

@@ -30,6 +30,14 @@ interface ApiResponse<T = any> {
   data?: T;
 }
 
+interface SchemaDef {
+  title: string;
+  description?: string;
+  fa_icon?: string;
+  properties: Record<string, any>;
+  required?: string[];
+}
+
 @customElement("json-schema-viewer")
 export class JsonSchemaViewer extends LitElement {
   @state() private schema: JsonSchema = { $defs: {} };
@@ -190,35 +198,68 @@ export class JsonSchemaViewer extends LitElement {
     }
   }
 
-  private async handleSchemaUpdate(name: string, section: any) {
+  private normalizeKey(title: string): string {
+    return title
+      .toLowerCase()
+      // Replace spaces and special characters with underscores
+      .replace(/[^a-z0-9]+/g, '_')
+      // Remove leading/trailing underscores
+      .replace(/^_+|_+$/g, '')
+      // Replace multiple consecutive underscores with a single one
+      .replace(/_+/g, '_');
+  }
+
+  private async handleSchemaUpdate(name: string, section: Partial<SchemaDef>) {
     try {
       // Create a clean copy of the current schema to avoid reference issues
       const currentSchema = JSON.parse(JSON.stringify(this.schema));
+      const currentDefs = currentSchema.$defs || {};
 
       // Find the original key in $defs that matches this section
-      const originalKey = Object.keys(currentSchema.$defs || {}).find(key => {
-        const def = currentSchema.$defs?.[key];
+      const originalKey = Object.keys(currentDefs).find(key => {
+        const def = currentDefs[key];
         return def.title === name || key === name.toLowerCase().replace(/\s+/g, '_');
       });
 
+      // Generate the new key from the section title or name
+      const newKey = this.normalizeKey(section.title || name);
+
+      console.log(`Section update: Original key: ${originalKey}, New key: ${newKey}`);
+      console.log('Section update received:', section);
+
+      // Create new $defs object with proper typing
+      const newDefs: Required<JsonSchema>['$defs'] = {};
+
+      // Copy all properties except the original key, maintaining order
+      Object.entries(currentDefs).forEach(([key, value]) => {
+        if (key !== originalKey) {
+          newDefs[key] = value as SchemaDef;
+        }
+        // When we reach the original key's position, insert the updated section with new key
+        if (key === originalKey) {
+          newDefs[newKey] = {
+            ...(originalKey ? currentDefs[originalKey] as SchemaDef : {}),  // Preserve existing fields
+            ...section,  // Apply updates
+            title: section.title || name,  // Use section.title if provided, otherwise use name
+          } as SchemaDef;
+        }
+      });
+
+      // If this is a new section (no originalKey), add it at the end
       if (!originalKey) {
-        console.error(`Could not find original key for section ${name}`);
-        return;
+        newDefs[newKey] = {
+          ...section,
+          title: section.title || name,
+        } as SchemaDef;
       }
 
-      console.log(`Found original key: ${originalKey} for section ${name}`);
-
-      // Create the updated schema using the original key
+      // Create the updated schema with new $defs
       const updatedSchema = {
         ...currentSchema,
-        $defs: {
-          ...currentSchema.$defs,
-          [originalKey]: {
-            ...section,
-            title: name // Preserve the original title
-          }
-        },
+        $defs: newDefs,
       };
+
+      console.log('Updated schema:', updatedSchema);
 
       // Update the local state
       this.schema = updatedSchema;

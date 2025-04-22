@@ -30,6 +30,7 @@ export class PropertyField extends LitElement {
   @property({ type: Object }) schemaEntry: SchemaProperty = { type: "string", hidden: false };
   @property({ type: Boolean }) required = false;
   @property({ type: Object }) validation = {};
+  @property({ type: Boolean }) isSection = false;
   @state() private editingField: string | null = null;
   @state() private showingIconPicker = false;
   @state() private pendingChanges: Partial<SchemaProperty> = {};
@@ -69,13 +70,18 @@ export class PropertyField extends LitElement {
   static styles = css`
     :host {
       display: block;
-      position: relative;
     }
 
     .property-container {
       border: 1px solid var(--border-color);
       border-radius: 4px;
       padding: 1rem;
+    }
+
+    /* Remove border when this is the first property in a section (section header) */
+    :host(:first-child) .property-container {
+      border: none;
+      padding: 0;
     }
 
     .property-header {
@@ -358,7 +364,6 @@ export class PropertyField extends LitElement {
     .field-group {
       display: flex;
       flex-direction: column;
-      width: 100%;
       min-height: 48px;
     }
 
@@ -388,6 +393,29 @@ export class PropertyField extends LitElement {
       border-radius: 4px;
       padding-left: 0.5rem;
       padding-right: 0.5rem;
+    }
+
+    .section-description {
+      flex: 1;
+      margin: 0;
+      padding: 0;
+    }
+
+    .section-description .field-group {
+      margin: 0;
+    }
+
+
+    .section-description .field-content {
+      border: none;
+      padding: 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+
+    .section-description .field-wrapper {
+      min-height: unset;
     }
 
   `;
@@ -865,38 +893,51 @@ export class PropertyField extends LitElement {
       <div class="property-container">
         <div class="property-header">
           <fa-icon class="property-icon" icon=${iconName} @click=${() => (this.showingIconPicker = true)}></fa-icon>
-          ${this.renderNameField()} ${this.renderTypeField()} ${this.renderRequiredField()} ${this.renderHiddenField()}
+          ${this.renderNameField()}
+          ${!this.isSection ? html`
+            ${this.renderTypeField()}
+            ${this.renderRequiredField()}
+            ${this.renderHiddenField()}
+          ` : html`
+            <div class="section-description">
+              ${schemaEntry.description
+                ? this.renderField("description", schemaEntry.description, true)
+                : this.renderField("description", "Add description...")}
+            </div>
+          `}
         </div>
 
-        ${schemaEntry.description
-          ? this.renderField("description", schemaEntry.description, true)
-          : this.renderField("description", "Add description...")}
-        ${schemaEntry.help_text
-          ? this.renderField("help_text", schemaEntry.help_text, true)
-          : this.renderField("help_text", "Add help text...")}
-        ${schemaEntry.default
-          ? this.renderField("default", schemaEntry.default)
-          : this.renderField("default", "Add default value...")}
-        ${isNumeric
-          ? html`
-              ${schemaEntry.minimum !== undefined
-                ? this.renderField("minimum", schemaEntry.minimum)
-                : this.renderField("minimum", "Add minimum...")}
-              ${schemaEntry.maximum !== undefined
-                ? this.renderField("maximum", schemaEntry.maximum)
-                : this.renderField("maximum", "Add maximum...")}
-              ${schemaEntry.multipleOf !== undefined
-                ? this.renderField("multipleOf", schemaEntry.multipleOf)
-                : this.renderField("multipleOf", "Add multiple of...")}
-            `
-          : ""}
-        ${schemaEntry.type === "string"
-          ? html`
-              ${schemaEntry.pattern !== undefined
-                ? this.renderField("pattern", schemaEntry.pattern)
-                : this.renderField("pattern", "Add pattern...")}
-            `
-          : ""}
+        ${!this.isSection ? html`
+          ${schemaEntry.description
+            ? this.renderField("description", schemaEntry.description, true)
+            : this.renderField("description", "Add description...")}
+          ${schemaEntry.help_text
+            ? this.renderField("help_text", schemaEntry.help_text, true)
+            : this.renderField("help_text", "Add help text...")}
+          ${schemaEntry.default
+            ? this.renderField("default", schemaEntry.default)
+            : this.renderField("default", "Add default value...")}
+          ${isNumeric
+            ? html`
+                ${schemaEntry.minimum !== undefined
+                  ? this.renderField("minimum", schemaEntry.minimum)
+                  : this.renderField("minimum", "Add minimum...")}
+                ${schemaEntry.maximum !== undefined
+                  ? this.renderField("maximum", schemaEntry.maximum)
+                  : this.renderField("maximum", "Add maximum...")}
+                ${schemaEntry.multipleOf !== undefined
+                  ? this.renderField("multipleOf", schemaEntry.multipleOf)
+                  : this.renderField("multipleOf", "Add multiple of...")}
+              `
+            : ""}
+          ${schemaEntry.type === "string"
+            ? html`
+                ${schemaEntry.pattern !== undefined
+                  ? this.renderField("pattern", schemaEntry.pattern)
+                  : this.renderField("pattern", "Add pattern...")}
+              `
+            : ""}
+        ` : ''}
         ${this.renderIconPicker()}
       </div>
     `;

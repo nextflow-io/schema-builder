@@ -26,6 +26,7 @@ export interface SchemaSection {
   description?: string;
   properties?: Record<string, any>;
   required?: string[];
+  fa_icon?: string;
 }
 
 export interface ValidationState {
@@ -36,16 +37,16 @@ export interface ValidationState {
   multipleOf?: boolean;
 }
 
-@customElement('schema-section')
+@customElement("schema-section")
 export class SchemaSectionElement extends LitElement {
   @property({ type: String })
-  name = '';
+  name = "";
 
   @property({ type: String })
-  description = '';
+  description = "";
 
   @property({ type: String })
-  icon = '';
+  icon = "";
 
   @property({ type: Object })
   section: SchemaSection = {};
@@ -58,9 +59,7 @@ export class SchemaSectionElement extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     if (!this.subComponentsLoaded) {
-      await Promise.all([
-        PropertyField(),
-      ]);
+      await Promise.all([PropertyField()]);
       this.subComponentsLoaded = true;
       this.requestUpdate();
     }
@@ -74,47 +73,19 @@ export class SchemaSectionElement extends LitElement {
     .section {
       background: var(--background-light);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       padding: 1.5rem;
-    }
-
-    .section-header {
-      margin-bottom: 2rem;
-    }
-
-    .section-title {
-      font-size: 1.25rem;
-      color: var(--primary-color);
-      margin: 0 0 0.5rem 0;
-    }
-
-    .form-group {
-      margin-bottom: 1.5rem;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: #333;
-    }
-
-    input, textarea {
-      width: 100%;
-      padding: 0.5rem;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 1rem;
-    }
-
-    textarea {
-      min-height: 100px;
-      resize: vertical;
+      &.border {
+        border: 2px solid var(--border-color);
+        box-shadow: none;
+      }
     }
 
     .parameters {
-      margin-top: 2rem;
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: var(--background-dark);
+      border-radius: 6px;
+      border: 1px solid var(--border-color-dark);
     }
 
     .parameters-header {
@@ -122,6 +93,8 @@ export class SchemaSectionElement extends LitElement {
       justify-content: space-between;
       align-items: center;
       margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-color);
     }
 
     .add-parameter {
@@ -135,6 +108,7 @@ export class SchemaSectionElement extends LitElement {
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.875rem;
+      transition: opacity 0.2s ease-in-out;
     }
 
     .add-parameter:hover {
@@ -145,8 +119,15 @@ export class SchemaSectionElement extends LitElement {
       display: grid;
       gap: 1rem;
     }
-  `;
 
+    /* Style nested property-fields differently than the section header */
+    .parameter-list ::slotted(property-field) {
+      background: var(--background-light);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 0.75rem;
+    }
+  `;
 
   private dispatchUpdate(section: SchemaSection) {
     console.log(`Dispatching section update for ${this.name}:`, JSON.stringify(section));
@@ -154,13 +135,13 @@ export class SchemaSectionElement extends LitElement {
     // Ensure we're sending a clean copy without any circular references or reactive properties
     const cleanSection = JSON.parse(JSON.stringify(section));
 
-    const event = new CustomEvent('section-update', {
+    const event = new CustomEvent("section-update", {
       detail: {
         name: this.name,
-        section: cleanSection
+        section: cleanSection,
       },
       bubbles: true,
-      composed: true
+      composed: true,
     });
     this.dispatchEvent(event);
   }
@@ -168,12 +149,12 @@ export class SchemaSectionElement extends LitElement {
   private addParameter() {
     const properties = this.section.properties || {};
     const newParam = {
-      type: 'string',
-      description: ''
+      type: "string",
+      description: "",
     };
 
     // Generate a unique parameter name
-    let paramName = 'new_parameter';
+    let paramName = "new_parameter";
     let counter = 1;
     while (properties[paramName]) {
       paramName = `new_parameter_${counter}`;
@@ -184,8 +165,8 @@ export class SchemaSectionElement extends LitElement {
       ...this.section,
       properties: {
         ...properties,
-        [paramName]: newParam
-      }
+        [paramName]: newParam,
+      },
     });
   }
 
@@ -216,33 +197,59 @@ export class SchemaSectionElement extends LitElement {
     const updatedSection = {
       ...this.section,
       properties,
-      required
+      required,
     };
 
     // Dispatch the update
-    console.log('Dispatching section update with renamed property:', updatedSection);
+    console.log("Dispatching section update with renamed property:", updatedSection);
     this.dispatchUpdate(updatedSection);
   }
 
+  private handleSectionHeaderUpdate(e: CustomEvent) {
+    const { name, property } = e.detail;
+
+    // Update the section with the new header information
+    this.dispatchUpdate({
+      ...this.section,
+      title: name,
+      description: property.description || "",  // Ensure we always send a value
+      fa_icon: property.fa_icon,
+      properties: this.section.properties || {},  // Preserve existing properties
+      required: this.section.required || []  // Preserve existing required fields
+    });
+
+    // Update local state to reflect changes immediately
+    this.name = name;
+    this.description = property.description || "";
+    this.icon = property.fa_icon || "";
+  }
+
   protected updated(changedProperties: Map<string, any>) {
-    if (changedProperties.has('section')) {
+    if (changedProperties.has("section")) {
       console.log(`Section ${this.name} updated:`, this.section);
       this.requestUpdate();
     }
   }
 
   render() {
+    // Create a SchemaProperty-like object for the section header
+    const sectionHeaderProperty: SchemaProperty = {
+      type: "string",
+      description: this.description,
+      fa_icon: this.icon,
+    };
+
     return html`
-      <div class="section">
-        <div class="section-header">
-          <h2 class="section-title">
-            <fa-icon icon=${this.icon}></fa-icon>
-            ${this.name} Parameters
-          </h2>
-          <p class="section-description">
-            <markdown-viewer .content=${this.description || ''}></markdown-viewer>
-            </p>
-          <div class="parameters">
+      <div class="section border">
+        <property-field
+          .name=${this.name}
+          .schemaEntry=${sectionHeaderProperty}
+          .required=${false}
+          .isSection=${true}
+          @property-update=${this.handleSectionHeaderUpdate}
+        ></property-field>
+
+        <div class="parameters">
           <div class="parameters-header">
             <button class="add-parameter" @click=${this.addParameter}>
               <fa-icon icon="fas fa-plus"></fa-icon> Add Parameter
@@ -250,32 +257,34 @@ export class SchemaSectionElement extends LitElement {
           </div>
 
           <div class="parameter-list">
-            ${Object.entries(this.section.properties || {}).map(([name, property]) => html`
-              <property-field
-                .name=${name}
-                .schemaEntry=${property}
-                .required=${(this.section.required || []).includes(name)}
-                .validation=${this.validation[`${this.name}.${name}`] || {}}
-                key=${name}
-                @property-update=${(e: CustomEvent) => {
-                  if (e.detail.name !== name) {
-                    // Handle name change
-                    this.handleNameUpdate(name, e.detail.name);
-                  } else {
-                    // Handle other property updates
-                    const properties = {
-                      ...this.section.properties,
-                      [name]: e.detail.property
-                    };
-                    this.dispatchUpdate({
-                      ...this.section,
-                      properties
-                    });
-                  }
-                }}
-              ></property-field>
-            `)}
-            </div>
+            ${Object.entries(this.section.properties || {}).map(
+              ([name, property]) => html`
+                <property-field
+                  .name=${name}
+                  .schemaEntry=${property}
+                  .required=${(this.section.required || []).includes(name)}
+                  .validation=${this.validation[`${this.name}.${name}`] || {}}
+                  .isSection=${false}
+                  key=${name}
+                  @property-update=${(e: CustomEvent) => {
+                    if (e.detail.name !== name) {
+                      // Handle name change
+                      this.handleNameUpdate(name, e.detail.name);
+                    } else {
+                      // Handle other property updates
+                      const properties = {
+                        ...this.section.properties,
+                        [name]: e.detail.property,
+                      };
+                      this.dispatchUpdate({
+                        ...this.section,
+                        properties,
+                      });
+                    }
+                  }}
+                ></property-field>
+              `
+            )}
           </div>
         </div>
       </div>

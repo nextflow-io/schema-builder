@@ -1,30 +1,48 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { SchemaProperty } from './schema-section';
-import sanitizeHtml from 'sanitize-html';
-import { marked } from 'marked';
-import '../common/fa-icon-picker';
-import '../common/regex-tester';
+import '../common/fa-icon';
 import '../common/markdown-viewer';
+import type sanitizeHtml from 'sanitize-html';
+
+// Lazy load components and dependencies
+const loadDependencies = async () => {
+  const [
+    sanitizeHtmlModule,
+    markedModule,
+  ] = await Promise.all([
+    import('sanitize-html'),
+    import('marked'),
+    import('../common/fa-icon-picker'),
+    import('../common/regex-tester'),
+  ]);
+  return {
+    sanitizeHtml: sanitizeHtmlModule.default,
+    marked: markedModule.marked,
+  };
+};
 
 type EditableFields = keyof SchemaProperty;
 
-@customElement('property-field')
+@customElement("property-field")
 export class PropertyField extends LitElement {
-  @property({ type: String }) name = '';
-  @property({ type: Object }) schemaEntry: SchemaProperty = { type: 'string', hidden: false };
+  @property({ type: String }) name = "";
+  @property({ type: Object }) schemaEntry: SchemaProperty = { type: "string", hidden: false };
   @property({ type: Boolean }) required = false;
   @property({ type: Object }) validation = {};
   @state() private editingField: string | null = null;
   @state() private showingIconPicker = false;
   @state() private pendingChanges: Partial<SchemaProperty> = {};
   @state() private pendingName: string | null = null;
-  @query('input, textarea, select') private inputElement?: HTMLElement;
-  @state() private processedDescription = '';
-  @state() private processedHelpText = '';
+  @query("input, textarea, select") private inputElement?: HTMLElement;
+  @state() private processedDescription = "";
+  @state() private processedHelpText = "";
+
+  private deps: { sanitizeHtml: typeof sanitizeHtml; marked: typeof import("marked").marked } | null = null;
+  private subComponentsLoaded = false;
 
   private handleGlobalEscape = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       if (this.editingField || this.showingIconPicker) {
         e.preventDefault();
         this.cancelEdit();
@@ -33,14 +51,19 @@ export class PropertyField extends LitElement {
     }
   };
 
-  connectedCallback() {
+  async connectedCallback() {
     super.connectedCallback();
-    document.addEventListener('keydown', this.handleGlobalEscape);
+    if (!this.subComponentsLoaded) {
+      this.deps = await loadDependencies();
+      this.subComponentsLoaded = true;
+      this.requestUpdate();
+    }
+    document.addEventListener("keydown", this.handleGlobalEscape);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    document.removeEventListener('keydown', this.handleGlobalEscape);
+    document.removeEventListener("keydown", this.handleGlobalEscape);
   }
 
   static styles = css`
@@ -79,7 +102,6 @@ export class PropertyField extends LitElement {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      cursor: pointer;
       width: 100%;
       min-height: 32px;
       & .markdown {
@@ -98,11 +120,9 @@ export class PropertyField extends LitElement {
       margin-left: 0.25rem;
     }
 
-    .cancel-button:hover {
-      color: var(--text-color);
-    }
-
-    .property-type, .property-required, .hidden-badge {
+    .property-type,
+    .property-required,
+    .hidden-badge {
       font-size: 0.9rem;
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
@@ -112,8 +132,8 @@ export class PropertyField extends LitElement {
     }
 
     .property-type {
-      color: #666;
-      background: #f8f9fa;
+      color: var(--text-muted);
+      background: var(--input-bg);
       border: none;
     }
 
@@ -122,12 +142,12 @@ export class PropertyField extends LitElement {
     }
 
     .property-type:hover {
-      background: #e9ecef;
+      background: var(--background-hover);
     }
 
     .hidden-badge {
-      color: #666;
-      background: #f8f9fa;
+      color: var(--text-muted);
+      background: var(--input-bg);
     }
 
     .field-wrapper:hover .edit-button {
@@ -160,7 +180,7 @@ export class PropertyField extends LitElement {
       width: 100%;
       position: relative;
       display: inline-flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.5rem;
       min-height: 32px;
     }
@@ -185,35 +205,54 @@ export class PropertyField extends LitElement {
     }
 
     .field-editor .cancel-button:hover {
-      background: var(--background-hover);
+      color: var(--text-color);
+      border: 1px solid var(--text-color);
     }
 
     .field-editor textarea {
       width: 100%;
       min-height: 100px;
       padding: 0.5rem;
-      border: 1px solid var(--border-color);
+      border: 1px solid var(--border-color-dark);
       border-radius: 4px;
-      font-family: inherit;
+      font-family: var(--font-monospace);
       resize: vertical;
+      background: var(--input-bg);
+      color: var(--text-color);
+      outline: none;
+    }
+
+    .field-editor textarea:focus-visible {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(26, 150, 85, 0.25);
     }
 
     .field-editor input,
     .field-editor select {
       height: 32px;
       box-sizing: border-box;
+      background: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color-dark);
+      outline: none;
+    }
+
+    .field-editor input:focus-visible,
+    .field-editor select:focus-visible {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(26, 150, 85, 0.25);
     }
 
     .field-editor input {
       width: 100%;
       padding: 0.5rem;
-      border: 1px solid var(--border-color);
       border-radius: 4px;
     }
 
     .field-editor select {
       padding: 0.5rem;
-      border: 1px solid var(--border-color);
       border-radius: 4px;
     }
 
@@ -254,10 +293,10 @@ export class PropertyField extends LitElement {
     .actions {
       display: flex;
       gap: 0.5rem;
-      margin-top: 0.5rem;
     }
 
-    .save-button, .cancel-button {
+    .save-button,
+    .cancel-button {
       padding: 0.25rem 0.5rem;
       border-radius: 4px;
       cursor: pointer;
@@ -267,7 +306,12 @@ export class PropertyField extends LitElement {
       background: var(--primary-color);
       color: white;
       border: none;
+      opacity: 0.9;
+      &:hover {
+        opacity: 1;
+      }
     }
+
 
     .toggle-label {
       display: inline-flex;
@@ -334,25 +378,39 @@ export class PropertyField extends LitElement {
       font-size: 0.8rem;
       margin-top: 0.25rem;
     }
+
+    .text-muted {
+      color: var(--text-muted);
+    }
+
+    .border {
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+
   `;
 
   private handlePropertyUpdate(field: EditableFields, value: any) {
     console.log(`Updating property '${this.name}.${field}' to:`, value);
 
     // Create a clean copy of the schema entry
-    const updatedEntry = JSON.parse(JSON.stringify({
-      ...this.schemaEntry,
-      [field]: value
-    }));
+    const updatedEntry = JSON.parse(
+      JSON.stringify({
+        ...this.schemaEntry,
+        [field]: value,
+      })
+    );
 
     // Send the update event to the parent
-    const event = new CustomEvent('property-update', {
+    const event = new CustomEvent("property-update", {
       detail: {
         name: this.name,
-        property: updatedEntry
+        property: updatedEntry,
       },
       bubbles: true,
-      composed: true
+      composed: true,
     });
 
     // Dispatch the event
@@ -377,13 +435,13 @@ export class PropertyField extends LitElement {
     const property = JSON.parse(JSON.stringify(this.schemaEntry));
 
     // Send the update event to the parent
-    const event = new CustomEvent('property-update', {
+    const event = new CustomEvent("property-update", {
       detail: {
         name: newName,
-        property: property
+        property: property,
       },
       bubbles: true,
-      composed: true
+      composed: true,
     });
 
     // Dispatch the event
@@ -398,14 +456,14 @@ export class PropertyField extends LitElement {
     setTimeout(() => {
       this.name = newName;
       this.requestUpdate();
-      console.log('Name updated in component to:', this.name);
+      console.log("Name updated in component to:", this.name);
     }, 50);
   }
 
   private handleInputChange(field: EditableFields, value: any) {
     this.pendingChanges = {
       ...this.pendingChanges,
-      [field]: value
+      [field]: value,
     };
   }
 
@@ -422,37 +480,34 @@ export class PropertyField extends LitElement {
   }
 
   private async parseMarkdown(text: string | undefined): Promise<string> {
-    if (!text) return '';
-    const parsed = await marked.parse(text);
-    return sanitizeHtml(parsed, {
-      allowedTags: ['p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li'],
-      allowedAttributes: {}
-    });
+    if (!text) return "";
+    if (!this.deps) return text;
+    const html = await this.deps.marked(text);
+    return this.deps.sanitizeHtml(html);
   }
 
   protected async updated(changedProperties: Map<string, any>) {
-    if (changedProperties.has('editingField') && this.editingField) {
+    if (changedProperties.has("editingField") && this.editingField) {
       setTimeout(() => this.inputElement?.focus(), 0);
     }
 
-    if (changedProperties.has('name')) {
+    if (changedProperties.has("name")) {
       console.log(`Property name changed to: ${this.name}`);
       this.requestUpdate();
     }
 
-    if (changedProperties.has('schemaEntry')) {
-      console.log('schemaEntry updated:', this.schemaEntry);
+    if (changedProperties.has("schemaEntry")) {
+      console.log("schemaEntry updated:", this.schemaEntry);
       this.processedDescription = await this.parseMarkdown(this.schemaEntry.description);
       this.processedHelpText = await this.parseMarkdown(this.schemaEntry.help_text);
 
       // Force a complete re-render of the component
       this.requestUpdate();
-
     }
   }
 
   private handleKeyDown(e: KeyboardEvent, field: EditableFields) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       if (e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -473,39 +528,40 @@ export class PropertyField extends LitElement {
 
   private renderFieldEditor(field: EditableFields) {
     const value = this.pendingChanges[field] ?? this.schemaEntry[field];
-    const isNumeric = field === 'minimum' || field === 'maximum' || field === 'multipleOf';
+    const isNumeric = field === "minimum" || field === "maximum" || field === "multipleOf";
 
-    if (field === 'type') {
+    if (field === "type") {
       return html`
         <select
           autofocus
           .value=${value}
           @change=${(e: Event) => this.handleInputChange(field, (e.target as HTMLSelectElement).value)}
         >
-          ${['string', 'number', 'integer', 'boolean'].map(type => html`
-            <option value=${type} ?selected=${type === value}>${type}</option>
-          `)}
+          ${["string", "number", "integer", "boolean"].map(
+            (type) => html` <option value=${type} ?selected=${type === value}>${type}</option> `
+          )}
         </select>
       `;
     }
 
-    if (field === 'description' || field === 'help_text') {
+    if (field === "description" || field === "help_text") {
       return html`
         <textarea
           autofocus
-          .value=${value || ''}
+          .value=${value || ""}
           @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLTextAreaElement).value)}
           @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
         ></textarea>
       `;
     }
 
-    if (field === 'default' || isNumeric) {
-      if (this.schemaEntry.type === 'boolean') {
+    const isDefaultField = field === "default";
+    if (isDefaultField || isNumeric) {
+      if (this.schemaEntry.type === "boolean") {
         return html`
           <select
             autofocus
-            .value=${value || 'false'}
+            .value=${value || "false"}
             @change=${(e: Event) => this.handleInputChange(field, (e.target as HTMLSelectElement).value)}
           >
             <option value="true">true</option>
@@ -514,17 +570,18 @@ export class PropertyField extends LitElement {
         `;
       }
 
-      const isDefaultField = field === 'default';
-      const isInvalid = isDefaultField && this.schemaEntry.type === 'string' &&
-                       !this.validateAgainstPattern(value);
+      const isInvalid = isDefaultField && this.schemaEntry.type === "string" && !this.validateAgainstPattern(value);
 
       return html`
         <div>
           <input
             autofocus
-            type=${this.schemaEntry.type === 'number' || this.schemaEntry.type === 'integer' || isNumeric ? 'number' : 'text'}
-            class=${isInvalid ? 'input-invalid' : ''}
-            .value=${value || ''}
+            type=${this.schemaEntry.type === "number" || this.schemaEntry.type === "integer" || isNumeric
+              ? "number"
+              : "text"}
+            class=${isInvalid ? "input-invalid" : ""}
+            .value=${value || ""}
+            placeholder=${isDefaultField ? "Add default value..." : ""}
             @input=${(e: Event) => {
               const input = e.target as HTMLInputElement;
               let newValue: string | number = input.value;
@@ -534,31 +591,30 @@ export class PropertyField extends LitElement {
               this.handleInputChange(field, newValue);
             }}
             @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
-          >
-          ${isInvalid ? html`
-            <div class="validation-message">
-              Default value does not match pattern: <code>${this.schemaEntry.pattern}</code>
-            </div>
-          ` : ''}
+          />
+          ${isInvalid
+            ? html`
+                <div class="validation-message">
+                  Default value does not match pattern: <code>${this.schemaEntry.pattern}</code>
+                </div>
+              `
+            : ""}
         </div>
       `;
     }
 
-    if (field === 'pattern') {
+    if (field === "pattern") {
       return html`
         <div class="pattern-editor">
           <input
             autofocus
             type="text"
             placeholder="Regular expression pattern"
-            .value=${value || ''}
+            .value=${value || ""}
             @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLInputElement).value)}
             @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
-          >
-          <regex-tester
-            .pattern=${value || ''}
-            .defaultValue=${this.schemaEntry.default || ''}
-          ></regex-tester>
+          />
+          <regex-tester .pattern=${value || ""} .defaultValue=${this.schemaEntry.default || ""}></regex-tester>
         </div>
       `;
     }
@@ -567,18 +623,25 @@ export class PropertyField extends LitElement {
       <input
         autofocus
         type="text"
-        .value=${value || ''}
+        .value=${value || ""}
         @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLInputElement).value)}
         @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
-      >
+      />
     `;
   }
 
   private renderField(field: string, defaultContent: any, isMarkdown = false) {
-    const label = field.replace(/([A-Z])/g, ' $1').toLowerCase();
-    const content = (field in this.schemaEntry && this.schemaEntry[field as keyof SchemaProperty] !== undefined)
-      ? this.schemaEntry[field as keyof SchemaProperty]
-      : defaultContent;
+    const label = field.replace(/([A-Z])/g, " $1").toLowerCase();
+    const content = this.pendingChanges[field as keyof SchemaProperty] ?? defaultContent;
+    const displayContent = isMarkdown
+      ? html`<markdown-viewer
+          .content=${field === "description"
+            ? this.schemaEntry.description || ''
+            : field === "help_text"
+            ? this.schemaEntry.help_text || ''
+            : content}
+        ></markdown-viewer>`
+      : content;
 
     return html`
       <div class="field-group">
@@ -591,8 +654,7 @@ export class PropertyField extends LitElement {
                   <div class="actions">
                     <button
                       class="save-button"
-                      @click=${() => this.saveEdit(field as EditableFields)}
-                      ?disabled=${!(field in this.pendingChanges)}
+                      @click=${() => field in this.pendingChanges ? this.saveEdit(field as EditableFields) : this.cancelEdit()}
                     >
                       <fa-icon icon="fas fa-check"></fa-icon>
                       Save
@@ -605,12 +667,11 @@ export class PropertyField extends LitElement {
                 </div>
               `
             : html`
-                <div class='field-content' @click=${() => (this.editingField = field)}>
-                  ${isMarkdown
-                    ? html`<markdown-viewer .content=${content}></markdown-viewer>`
-                    : field === 'pattern'
-                      ? html`<code>${content}</code>`
-                      : content}
+                <div
+                  class="field-content border ${content === defaultContent ? "text-muted" : ""}"
+                  @click=${() => (this.editingField = field)}
+                >
+                  ${displayContent}
                 </div>
               `}
         </div>
@@ -622,25 +683,24 @@ export class PropertyField extends LitElement {
     return html`
       <div class="field-group">
         <div class="field-label">Type</div>
-        <div class="field-wrapper" @click=${() => this.editingField = 'type'}>
-          ${this.editingField === 'type'
+        <div class="field-wrapper" @click=${() => (this.editingField = "type")}>
+          ${this.editingField === "type"
             ? html`
-              <select
-                class="property-type"
-                .value=${this.schemaEntry.type}
-                @change=${(e: Event) => {
-                  this.handlePropertyUpdate('type', (e.target as HTMLSelectElement).value);
-                  this.editingField = null;
-                }}
-              >
-                ${['string', 'number', 'integer', 'boolean'].map(type => html`
-                  <option value=${type} ?selected=${type === this.schemaEntry.type}>${type}</option>
-                `)}
-              </select>
-              ${this.renderCancelButton()}
-            `
-            : html`<span class="property-type">${this.schemaEntry.type}</span>`
-          }
+                <select
+                  class="property-type"
+                  .value=${this.schemaEntry.type}
+                  @change=${(e: Event) => {
+                    this.handlePropertyUpdate("type", (e.target as HTMLSelectElement).value);
+                    this.editingField = null;
+                  }}
+                >
+                  ${["string", "number", "integer", "boolean"].map(
+                    (type) => html` <option value=${type} ?selected=${type === this.schemaEntry.type}>${type}</option> `
+                  )}
+                </select>
+                ${this.renderCancelButton()}
+              `
+            : html`<span class="property-type">${this.schemaEntry.type}</span>`}
         </div>
       </div>
     `;
@@ -650,28 +710,31 @@ export class PropertyField extends LitElement {
     return html`
       <div class="field-group">
         <div class="field-label">Required</div>
-        <div class="field-wrapper" @click=${() => this.editingField = 'required'}>
-          ${this.editingField === 'required'
+        <div class="field-wrapper" @click=${() => (this.editingField = "required")}>
+          ${this.editingField === "required"
             ? html`
-              <select
-                autofocus
-                class="property-type"
-                .value=${this.required ? 'true' : 'false'}
-                @change=${(e: Event) => {
-                  const isRequired = (e.target as HTMLSelectElement).value === 'true';
-                  this.dispatchEvent(new CustomEvent('required-update', {
-                    detail: { name: this.name, required: isRequired },
-                    bubbles: true,
-                    composed: true
-                  }));
-                  this.editingField = null;
-                }}
-              >
-                <option value="false">false</option>
-                <option value="true">true</option>
-              </select>
-              ${this.renderCancelButton()}
-            `            : html`<span class="property-required">${this.required ? 'true' : 'false'}</span>`}
+                <select
+                  autofocus
+                  class="property-type"
+                  .value=${this.required ? "true" : "false"}
+                  @change=${(e: Event) => {
+                    const isRequired = (e.target as HTMLSelectElement).value === "true";
+                    this.dispatchEvent(
+                      new CustomEvent("required-update", {
+                        detail: { name: this.name, required: isRequired },
+                        bubbles: true,
+                        composed: true,
+                      })
+                    );
+                    this.editingField = null;
+                  }}
+                >
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+                ${this.renderCancelButton()}
+              `
+            : html`<span class="property-required">${this.required ? "true" : "false"}</span>`}
         </div>
       </div>
     `;
@@ -681,23 +744,23 @@ export class PropertyField extends LitElement {
     return html`
       <div class="field-group">
         <div class="field-label">Hidden</div>
-        <div class="field-wrapper" @click=${() => this.editingField = 'hidden'}>
-          ${this.editingField === 'hidden'
+        <div class="field-wrapper" @click=${() => (this.editingField = "hidden")}>
+          ${this.editingField === "hidden"
             ? html`
-              <select
-                class="property-type"
-                .value=${this.schemaEntry.hidden ? 'true' : 'false'}
-                @change=${(e: Event) => {
-                  this.handlePropertyUpdate('hidden', (e.target as HTMLSelectElement).value === 'true');
-                  this.editingField = null;
-                }}
-              >
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-              ${this.renderCancelButton()}
-            `
-            : html`<span class="hidden-badge">${this.schemaEntry.hidden ? 'true' : 'false'}</span>`}
+                <select
+                  class="property-type"
+                  .value=${this.schemaEntry.hidden ? "true" : "false"}
+                  @change=${(e: Event) => {
+                    this.handlePropertyUpdate("hidden", (e.target as HTMLSelectElement).value === "true");
+                    this.editingField = null;
+                  }}
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+                ${this.renderCancelButton()}
+              `
+            : html`<span class="hidden-badge">${this.schemaEntry.hidden ? "true" : "false"}</span>`}
         </div>
       </div>
     `;
@@ -705,27 +768,30 @@ export class PropertyField extends LitElement {
 
   private renderCancelButton() {
     return html`
-      <button class="cancel-button" @click=${(e: Event) => {
-        e.stopPropagation();
-        this.cancelEdit();
-      }}>
+      <button
+        class="cancel-button"
+        @click=${(e: Event) => {
+          e.stopPropagation();
+          this.cancelEdit();
+        }}
+      >
         <fa-icon icon="fas fa-times"></fa-icon>
       </button>
     `;
   }
 
   private renderIconPicker() {
-    if (!this.showingIconPicker) return '';
+    if (!this.showingIconPicker) return "";
     return html`
-      <div class="icon-picker-overlay" @click=${() => this.showingIconPicker = false}>
+      <div class="icon-picker-overlay" @click=${() => (this.showingIconPicker = false)}>
         <div class="icon-picker-container" @click=${(e: Event) => e.stopPropagation()}>
-          <button class="close-picker" @click=${() => this.showingIconPicker = false}>
+          <button class="close-picker" @click=${() => (this.showingIconPicker = false)}>
             <fa-icon icon="fas fa-times"></fa-icon>
           </button>
           <fa-icon-picker
-            .value=${this.schemaEntry.fa_icon || 'fas fa-question-circle'}
+            .value=${this.schemaEntry.fa_icon || "fas fa-question-circle"}
             @icon-select=${(e: CustomEvent) => {
-              this.handlePropertyUpdate('fa_icon', e.detail.value);
+              this.handlePropertyUpdate("fa_icon", e.detail.value);
               this.showingIconPicker = false;
             }}
           ></fa-icon-picker>
@@ -784,50 +850,53 @@ export class PropertyField extends LitElement {
                   </div>
                 </div>
               `
-            : html`<div class="field-content" @click=${() => (this.editingField = "name")}>
-                ${this.name || ""}
-              </div>`}
+            : html`<div class="field-content" @click=${() => (this.editingField = "name")}>${this.name || ""}</div>`}
         </div>
       </div>
     `;
   }
 
   render() {
-
     const { name, schemaEntry } = this;
-    const iconName = schemaEntry.fa_icon || 'fas fa-question-circle';
-    const isNumeric = schemaEntry.type === 'number' || schemaEntry.type === 'integer';
+    const iconName = schemaEntry.fa_icon || "fas fa-question-circle";
+    const isNumeric = schemaEntry.type === "number" || schemaEntry.type === "integer";
 
     return html`
       <div class="property-container">
         <div class="property-header">
-          <fa-icon class="property-icon" icon=${iconName} @click=${() => this.showingIconPicker = true}></fa-icon>
-          ${this.renderNameField()}
-          ${this.renderTypeField()}
-          ${this.renderRequiredField()}
-          ${this.renderHiddenField()}
+          <fa-icon class="property-icon" icon=${iconName} @click=${() => (this.showingIconPicker = true)}></fa-icon>
+          ${this.renderNameField()} ${this.renderTypeField()} ${this.renderRequiredField()} ${this.renderHiddenField()}
         </div>
 
         ${schemaEntry.description
-          ? this.renderField('description', schemaEntry.description, true)
-          : this.renderField('description', 'Add description...')}
-
+          ? this.renderField("description", schemaEntry.description, true)
+          : this.renderField("description", "Add description...")}
         ${schemaEntry.help_text
-          ? this.renderField('help_text', schemaEntry.help_text, true)
-          : this.renderField('help_text', 'Add help text...')}
-
-        ${this.renderField('default', schemaEntry.default)}
-
-        ${isNumeric ? html`
-          ${schemaEntry.minimum !== undefined ? this.renderField('minimum', schemaEntry.minimum) : this.renderField('minimum', 'Add minimum...')}
-          ${schemaEntry.maximum !== undefined ? this.renderField('maximum', schemaEntry.maximum) : this.renderField('maximum', 'Add maximum...')}
-          ${schemaEntry.multipleOf !== undefined ? this.renderField('multipleOf', schemaEntry.multipleOf) : this.renderField('multipleOf', 'Add multiple of...')}
-        ` : ''}
-
-        ${schemaEntry.type === 'string' ? html`
-          ${schemaEntry.pattern !== undefined ? this.renderField('pattern', schemaEntry.pattern) : this.renderField('pattern', 'Add pattern...')}
-        ` : ''}
-
+          ? this.renderField("help_text", schemaEntry.help_text, true)
+          : this.renderField("help_text", "Add help text...")}
+        ${schemaEntry.default
+          ? this.renderField("default", schemaEntry.default)
+          : this.renderField("default", "Add default value...")}
+        ${isNumeric
+          ? html`
+              ${schemaEntry.minimum !== undefined
+                ? this.renderField("minimum", schemaEntry.minimum)
+                : this.renderField("minimum", "Add minimum...")}
+              ${schemaEntry.maximum !== undefined
+                ? this.renderField("maximum", schemaEntry.maximum)
+                : this.renderField("maximum", "Add maximum...")}
+              ${schemaEntry.multipleOf !== undefined
+                ? this.renderField("multipleOf", schemaEntry.multipleOf)
+                : this.renderField("multipleOf", "Add multiple of...")}
+            `
+          : ""}
+        ${schemaEntry.type === "string"
+          ? html`
+              ${schemaEntry.pattern !== undefined
+                ? this.renderField("pattern", schemaEntry.pattern)
+                : this.renderField("pattern", "Add pattern...")}
+            `
+          : ""}
         ${this.renderIconPicker()}
       </div>
     `;

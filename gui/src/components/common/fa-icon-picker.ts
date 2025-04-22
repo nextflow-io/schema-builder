@@ -1,9 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { library } from '@fortawesome/fontawesome-svg-core';
-import { fas } from '@fortawesome/free-solid-svg-icons';
-import { far } from '@fortawesome/free-regular-svg-icons';
-import { fab } from '@fortawesome/free-brands-svg-icons';
+import { loadExtendedIcons } from '../../icons';
 import './fa-icon';
 
 @customElement('fa-icon-picker')
@@ -16,6 +13,9 @@ export class FaIconPicker extends LitElement {
 
   @state()
   private icons: { name: string; prefix: string }[] = [];
+
+  @state()
+  private loading = false;
 
   static styles = css`
     :host {
@@ -84,34 +84,55 @@ export class FaIconPicker extends LitElement {
       white-space: nowrap;
       width: 100%;
     }
+
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 200px;
+      color: var(--text-muted);
+    }
   `;
 
-  constructor() {
-    super();
-    this.initializeIcons();
+  async connectedCallback() {
+    super.connectedCallback();
+    if (this.icons.length === 0) {
+      await this.initializeIcons();
+    }
   }
 
-  private initializeIcons() {
-    library.add(fas, far, fab);
-    const iconsList: { name: string; prefix: string }[] = [];
+  private async initializeIcons() {
+    this.loading = true;
+    try {
+      // Load extended icons (regular + brands)
+      const { fab } = await loadExtendedIcons();
+      // Load solid icons (they should already be in the library)
+      const { fas } = await import('@fortawesome/free-solid-svg-icons');
 
-    const addIcons = (icons: any, prefix: string) => {
-      Object.keys(icons).forEach(name => {
-        if (name.startsWith('fa')) {
-          const iconName = name
-            .replace('fa', '')
-            .replace(/([a-z])([A-Z0-9])/g, '$1-$2')
-            .toLowerCase();
-          iconsList.push({ name: iconName, prefix });
-        }
-      });
-    };
+      const iconsList: { name: string; prefix: string }[] = [];
 
-    addIcons(fas, 'fas');
-    addIcons(far, 'far');
-    addIcons(fab, 'fab');
+      const addIcons = (icons: any, prefix: string) => {
+        Object.keys(icons).forEach(name => {
+          if (name.startsWith('fa')) {
+            const iconName = name
+              .replace('fa', '')
+              .replace(/([a-z])([A-Z0-9])/g, '$1-$2')
+              .toLowerCase();
+            iconsList.push({ name: iconName, prefix });
+          }
+        });
+      };
 
-    this.icons = iconsList;
+      addIcons(fas, 'fas');
+      // addIcons(far, 'far');
+      addIcons(fab, 'fab');
+
+      this.icons = iconsList;
+    } catch (error) {
+      console.error('Failed to load icons:', error);
+    } finally {
+      this.loading = false;
+    }
   }
 
   private handleSearch(e: Event) {
@@ -137,6 +158,14 @@ export class FaIconPicker extends LitElement {
   }
 
   render() {
+    if (this.loading) {
+      return html`
+        <div class="loading">
+          Loading icons...
+        </div>
+      `;
+    }
+
     const filteredIcons = this.getFilteredIcons();
 
     return html`

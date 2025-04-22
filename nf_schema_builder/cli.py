@@ -1,7 +1,8 @@
 """Command-line interface for nf-schema-builder."""
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import typer
 from jsonschema.exceptions import SchemaError, ValidationError
@@ -23,10 +24,60 @@ app = typer.Typer(
 )
 
 
+@dataclass
+class CLIConfig:
+    """Configuration class for CLI settings."""
+
+    schema_file: Path
+    url: str = "localhost:5173"
+    debug: bool = False
+    no_browser: bool = False
+
+
+def handle_cli_error(error: Exception) -> None:
+    """Centralized error handling for CLI commands."""
+    error_messages: dict[type[Exception], str] = {
+        SchemaError: "Invalid schema",
+        ValidationError: "Invalid parameters",
+        FileNotFoundError: "Schema file not found",
+        ConnectionError: "Failed to connect to server",
+    }
+
+    message = error_messages.get(type(error), "An unexpected error occurred")
+    log.error(f"❌ {message}: {str(error)}")
+    raise typer.Exit(1) from error
+
+
+def perform_validation(schema_file: Path, debug: bool = False) -> None:
+    """Perform all validation steps for a schema file."""
+    if not check_nextflow_installation():
+        raise RuntimeError(
+            "Nextflow is not installed. Please install Nextflow first: "
+            "https://www.nextflow.io/docs/latest/getstarted.html"
+        )
+
+    schema = load_schema(schema_file)
+    validate_json_schema(schema)
+
+    if schema_file.name == "nextflow_schema.json":
+        config = ValidationConfig.from_workflow(schema_file.parent)
+        invalid_params = validate_workflow_parameters(schema, config)
+        if invalid_params:
+            raise ValidationError("One or more parameters are invalid")
+
+
+def handle_send_response(response: Any, url: str, debug: bool) -> None:
+    """Handle the response from sending schema."""
+    if response:
+        log.info(f"✅ Schema sent successfully to {url}")
+        if debug:
+            log.debug(f"Response: {response}")
+    else:
+        raise ConnectionError(f"Failed to send schema to {url}")
+
+
 @app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-) -> None:
+def main(ctx: typer.Context) -> None:
     """Handle default command when no subcommand is provided."""
     if ctx.invoked_subcommand is None:
         ctx.invoke(send)
@@ -51,14 +102,6 @@ def send(
             help="URL to send schema to",
         ),
     ] = "localhost:5173",
-    timeout: Annotated[
-        int,
-        typer.Option(
-            "--timeout",
-            "-t",
-            help="Timeout in seconds",
-        ),
-    ] = 10,
     debug: Annotated[
         bool,
         typer.Option(
@@ -77,34 +120,26 @@ def send(
 ) -> None:
     """Send schema file to URL for visualization or processing."""
     try:
-        # Set debug logging if requested
-        set_debug(debug)
+        if schema_file is None:
+            schema_file = Path("nextflow_schema.json")
 
-        # Validate schema file exists
-        assert schema_file is not None
+        config = CLIConfig(
+            schema_file=schema_file,
+            url=url,
+            debug=debug,
+            no_browser=no_browser,
+        )
+        set_debug(config.debug)
 
         # Run validation steps first
-        validate(schema_file, debug)
+        perform_validation(config.schema_file, config.debug)
 
         # Send schema
-        response = send_schema(schema_file, url, timeout, no_browser)
-        if response:
-            log.info(f"✅ Schema sent successfully to {url}")
-            if debug:
-                log.debug(f"Response: {response}")
-        else:
-            log.error(f"❌ Failed to send schema to {url}")
-            raise typer.Exit(1)
+        response = send_schema(config.schema_file, config.url, no_browser=config.no_browser)
+        handle_send_response(response, config.url, config.debug)
 
-    except SchemaError as err:
-        log.error(f"❌ Invalid schema: {err}")
-        raise typer.Exit(1) from err
-    except ValidationError as err:
-        log.error(f"❌ Invalid parameters: {err}")
-        raise typer.Exit(1) from err
     except Exception as err:
-        log.error(f"❌ Error: {err}")
-        raise typer.Exit(1) from err
+        handle_cli_error(err)
 
 
 @app.command()
@@ -114,33 +149,12 @@ def validate(
     debug: Annotated[bool, typer.Option("--debug", "-d", help="Enable debug logging")] = False,
 ) -> None:
     """Validate a JSON/YAML schema file against JSON Schema specifications and compare with Nextflow parameters."""
-    # Set debug logging if requested
-    set_debug(debug)
-
-    # First check if Nextflow is installed
-    if not check_nextflow_installation():
-        log.error(
-            "❌ Nextflow is not installed. Please install Nextflow first: https://www.nextflow.io/docs/latest/getstarted.html"
-        )
-        raise typer.Exit(1)
-
-    # Load schema
-    schema = load_schema(schema_file)
-
-    # Validate JSON schema
-    validate_json_schema(schema)
-
-    # If we are validating the main schema file, get the config and validate parameters
-    if schema_file.name == "nextflow_schema.json":
-        config = ValidationConfig.from_workflow(schema_file.parent)
-
-        # Validate workflow parameters
-        invalid_params = validate_workflow_parameters(schema, config)
-        if invalid_params:
-            log.error("❌ Schema validation failed: One or more parameters are invalid")
-            raise typer.Exit(1)
-
+    try:
+        set_debug(debug)
+        perform_validation(schema_file, debug)
         log.info("✅ All parameters are valid!")
+    except Exception as err:
+        handle_cli_error(err)
 
 
 if __name__ == "__main__":

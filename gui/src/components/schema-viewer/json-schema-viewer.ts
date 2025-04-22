@@ -1,8 +1,10 @@
 import { LitElement, html, css } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import "../common/fa-icon";
-import "./schema-section";
-import "./code-preview";
+// Lazy load components
+const SchemaSection = () => import("./schema-section");
+const CodePreview = () => import("./code-preview");
+import { formatDistanceToNow } from 'date-fns';
 
 interface JsonSchema {
   $schema?: string;
@@ -21,163 +23,137 @@ interface JsonSchema {
   description?: string;
 }
 
+interface ApiResponse<T = any> {
+  status: "success" | "error";
+  message?: string;
+  type?: string;
+  data?: T;
+}
+
 @customElement("json-schema-viewer")
 export class JsonSchemaViewer extends LitElement {
   @state() private schema: JsonSchema = { $defs: {} };
-  @state() private wsStatus: 'connected' | 'disconnected' = 'disconnected';
+  @state() private serverStatus: 'connected' | 'disconnected' = 'disconnected';
   @state() private lastSaveStatus: 'success' | 'error' | null = null;
-  private ws: WebSocket | null = null;
+  @state() private lastSaveTime: Date | null = null;
+  private healthCheckInterval: number | null = null;
 
-  connectedCallback() {
+  // Default to localhost:5173 if we're in development
+  private baseUrl = window.location.hostname === 'localhost'
+    ? 'http://localhost:5173'
+    : `http://${window.location.host}`;
+
+  async connectedCallback() {
     super.connectedCallback();
-    this.connectWebSocket();
+    // Preload components
+    await Promise.all([
+      SchemaSection(),
+      CodePreview()
+    ]);
+    console.log('Connecting to server at:', this.baseUrl);
+    await this.startHealthCheck();
+    if (this.serverStatus === 'connected') {
+      await this.fetchSchema();
+    }
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this.ws) {
-      this.ws.close();
+    if (this.healthCheckInterval) {
+      window.clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
     }
   }
 
-  private connectWebSocket() {
-    const wsUrl = `ws://localhost:5173/ws`;
-    console.log(`Connecting to WebSocket at ${wsUrl}`);
+  private async startHealthCheck() {
+    // Check health immediately
+    await this.checkHealth();
 
-    this.ws = new WebSocket(wsUrl);
-
-    this.ws.onopen = () => {
-      console.log('WebSocket connection established');
-      this.wsStatus = "connected";
-      // Request the current schema when connected
-      if (this.ws) {
-        console.log('Requesting current schema');
-        this.ws.send(
-          JSON.stringify({
-            type: "get_schema",
-          })
-        );
+    // Then check every 5 seconds
+    this.healthCheckInterval = window.setInterval(async () => {
+      await this.checkHealth();
+      // If we're connected but don't have a schema, try to fetch it
+      if (this.serverStatus === 'connected' && !this.schema.$defs) {
+        await this.fetchSchema();
       }
-    };
+    }, 5000);
+  }
 
-    this.ws.onclose = () => {
-      console.log('WebSocket connection closed');
-      this.wsStatus = "disconnected";
-      // Try to reconnect after 5 seconds
-      setTimeout(() => this.connectWebSocket(), 5000);
-    };
+  private async checkHealth() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/health`);
+      if (response.ok) {
+        this.serverStatus = 'connected';
+      } else {
+        console.warn('Health check failed with status:', response.status);
+        this.serverStatus = 'disconnected';
+      }
+    } catch (error) {
+      console.error("Health check failed:", error);
+      this.serverStatus = 'disconnected';
+    }
+  }
 
-    this.ws.onmessage = this.handleWebSocketMessage;
+  private async fetchSchema() {
+    try {
+      console.log('Fetching schema from:', `${this.baseUrl}/api/schema`);
+      const response = await fetch(`${this.baseUrl}/api/schema`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data: ApiResponse<JsonSchema> = await response.json();
+      console.log('Received schema response:', data);
 
-    this.ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      this.wsStatus = "disconnected";
-    };
+      if (data.status === "success" && data.data) {
+        console.log('Setting schema to:', data.data);
+        // Ensure we have a valid schema structure
+        this.schema = {
+          $defs: data.data.$defs || {},
+          ...data.data
+        };
+        console.log('Schema after update:', this.schema);
+        this.requestUpdate();
+      } else {
+        console.warn('Received invalid schema data:', data);
+      }
+    } catch (error) {
+      console.error('Error fetching schema:', error);
+    }
   }
 
   private async handleSave() {
     try {
-      // Make sure we have an open WebSocket connection
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        console.log('WebSocket not open, creating new connection');
-        this.ws = new WebSocket("ws://localhost:5173/ws");
-        await new Promise((resolve, reject) => {
-          if (!this.ws) return reject(new Error('No WebSocket'));
-          this.ws.onopen = resolve;
-          this.ws.onerror = reject;
-        });
-        console.log('WebSocket connection established');
-      }
-
-      // Send the save_schema message
-      const message = {
-        type: "save_schema",
-        data: this.schema,
-      };
-      this.ws.send(JSON.stringify(message));
-
-      // Wait for the response
-      const response = await new Promise<any>((resolve, reject) => {
-        if (!this.ws) return reject(new Error('No WebSocket'));
-
-        let timeout: number;
-
-        const cleanup = () => {
-          clearTimeout(timeout);
-          if (this.ws) {
-            this.ws.onmessage = this.handleWebSocketMessage.bind(this);
-          }
-        };
-
-        const handler = (event: MessageEvent) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log('Received WebSocket response:', data);
-
-            // Check if this is a response to our save
-            if (data.status !== undefined) {
-              cleanup(); // Clean up before resolving/rejecting
-
-              if (data.status === "success") {
-                resolve(data);
-              } else {
-                reject(new Error(data.message || 'Unknown error'));
-              }
-            }
-          } catch (e) {
-            console.error('Error parsing response:', e);
-            // Don't reject here, as it might be unrelated message
-          }
-        };
-
-        // Install temporary handler
-        this.ws.onmessage = handler;
-
-        // Set timeout
-        timeout = setTimeout(() => {
-          cleanup(); // Clean up before rejecting
-          reject(new Error('Timeout waiting for save response'));
-        }, 5000);
-
-        // Add error handler
-        this.ws.onerror = (error) => {
-          cleanup(); // Clean up before rejecting
-          console.error('WebSocket error during save:', error);
-          reject(error);
-        };
+      console.log('Saving schema:', this.schema);
+      const response = await fetch(`${this.baseUrl}/api/schema`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(this.schema),
       });
 
-      // Handle successful response
-      this.lastSaveStatus = 'success';
-      console.log("Schema saved successfully");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      return response;
+      const data: ApiResponse = await response.json();
+      console.log('Save response:', data);
+
+      if (data.status === "success") {
+        this.lastSaveStatus = 'success';
+        this.lastSaveTime = new Date();
+        console.log("Schema saved successfully");
+        // Refresh the schema to ensure we have the latest version
+        await this.fetchSchema();
+      } else {
+        throw new Error(data.message || "Unknown error");
+      }
+
+      return data;
     } catch (error) {
       this.lastSaveStatus = 'error';
       console.error("Failed to save schema:", error);
       throw error;
-    }
-  }
-
-  private handleWebSocketMessage = (event: MessageEvent) => {
-    try {
-      const message = JSON.parse(event.data);
-      if (message.type === "schema_update") {
-        console.log("Received schema update:", message.data);
-        // Store the previous schema to check for changes
-        const prevSchema = JSON.stringify(this.schema);
-
-        // Update the schema
-        this.schema = message.data;
-
-        // Force a complete re-render if the schema changed
-        if (prevSchema !== JSON.stringify(this.schema)) {
-          console.log("Schema changed, forcing re-render");
-          this.requestUpdate();
-        }
-      }
-    } catch (error) {
-      console.error("Error parsing WebSocket message:", error);
     }
   }
 
@@ -186,13 +162,31 @@ export class JsonSchemaViewer extends LitElement {
       // Save one last time before finishing
       await this.handleSave();
 
-      // Send finish command
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: "finish" }));
-        this.ws.close();
+      console.log('Sending finish command to:', `${this.baseUrl}/api/finish`);
+      const response = await fetch(`${this.baseUrl}/api/finish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: ApiResponse = await response.json();
+      if (data.status === "success") {
+        console.log("Finished successfully");
+        // Close the window
+        window.close();
+      } else {
+        throw new Error(data.message || "Unknown error");
       }
     } catch (error) {
       console.error("Error during finish:", error);
+      // Show error to user
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to finish: ${errorMessage}`);
     }
   }
 
@@ -308,7 +302,7 @@ export class JsonSchemaViewer extends LitElement {
       overflow-y: auto;
     }
 
-    .ws-status {
+    .server-status {
       margin-bottom: 1rem;
       padding: 0.5rem;
       border-radius: 4px;
@@ -318,12 +312,12 @@ export class JsonSchemaViewer extends LitElement {
       gap: 0.5rem;
     }
 
-    .ws-status.connected {
+    .server-status.connected {
       background-color: rgb(from var(--success-color) r g b / 0.5);
       color: var(--text-color);
     }
 
-    .ws-status.disconnected {
+    .server-status.disconnected {
       background-color: rgb(from var(--error-color) r g b / 0.5);
       color: var(--text-color);
     }
@@ -342,6 +336,14 @@ export class JsonSchemaViewer extends LitElement {
       color: var(--error-color);
     }
 
+    .text-muted {
+      color: var(--text-muted);
+    }
+
+    .text-centered {
+      text-align: center;
+    }
+
     fa-icon {
       font-size: 1em;
     }
@@ -356,9 +358,11 @@ export class JsonSchemaViewer extends LitElement {
             <p>Build your pipeline parameter schema</p>
           </div>
 
-          <div class="ws-status ${this.wsStatus}">
-            <fa-icon icon=${this.wsStatus === "connected" ? "fas check-circle" : "fas exclamation-circle"}></fa-icon>
-            ${this.wsStatus === "connected" ? "Connected" : "Disconnected"}
+          <div class="server-status ${this.serverStatus}">
+            <fa-icon
+              icon=${this.serverStatus === "connected" ? "fas check-circle" : "fas exclamation-circle"}
+            ></fa-icon>
+            ${this.serverStatus === "connected" ? "Connected" : "Disconnected"}
           </div>
 
           <div class="actions">
@@ -366,11 +370,20 @@ export class JsonSchemaViewer extends LitElement {
               <fa-icon icon="fas fa-save"></fa-icon>
               Save Schema
             </button>
-            ${this.lastSaveStatus ? html`
-              <div class="save-status ${this.lastSaveStatus}">
-                ${this.lastSaveStatus === 'success' ? 'Saved successfully' : 'Save failed'}
-              </div>
-            ` : ''}
+            ${this.lastSaveStatus
+              ? html`
+                  <div class="save-status ${this.lastSaveStatus}">
+                    ${this.lastSaveStatus === "success" ? "Saved successfully" : "Save failed"}
+                  </div>
+                `
+              : ""}
+            ${this.lastSaveTime
+              ? html`
+                  <small class="save-time text-muted text-centered">
+                    ${formatDistanceToNow(this.lastSaveTime, { addSuffix: true })}
+                  </small>
+                `
+              : ""}
             <button class="finish-button" @click=${this.handleFinish}>
               <fa-icon icon="fas fa-check-circle"></fa-icon>
               Finish
@@ -379,21 +392,19 @@ export class JsonSchemaViewer extends LitElement {
         </nav>
 
         <main class="main-content">
-          ${Object.entries(this.schema.$defs || {}).map(
-            ([name, def]) => {
-              return html`
-                <div class="schema-section">
-                  <schema-section
-                    .name=${def.title}
-                    .description=${def.description || ''}
-                    .icon=${def.fa_icon || ''}
-                    .section=${def}
-                    @section-update=${(e: CustomEvent) => this.handleSchemaUpdate(e.detail.name, e.detail.section)}
-                  ></schema-section>
-                </div>
-              `;
-            }
-          )}
+          ${Object.entries(this.schema.$defs || {}).map(([name, def]) => {
+            return html`
+              <div class="schema-section">
+                <schema-section
+                  .name=${def.title}
+                  .description=${def.description || ""}
+                  .icon=${def.fa_icon || ""}
+                  .section=${def}
+                  @section-update=${(e: CustomEvent) => this.handleSchemaUpdate(e.detail.name, e.detail.section)}
+                ></schema-section>
+              </div>
+            `;
+          })}
           <code-preview .data=${this.schema}></code-preview>
         </main>
       </div>

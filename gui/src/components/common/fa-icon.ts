@@ -1,8 +1,23 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { icon } from '@fortawesome/fontawesome-svg-core';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
+import { initFontAwesome } from '../../icons';
 import type { IconName, IconPrefix } from '@fortawesome/fontawesome-svg-core';
+
+let iconFunction: typeof import('@fortawesome/fontawesome-svg-core').icon | null = null;
+let initializationPromise: Promise<void> | null = null;
+
+const initialize = async () => {
+  if (initializationPromise) return initializationPromise;
+
+  initializationPromise = (async () => {
+    await initFontAwesome();
+    const { icon } = await import('@fortawesome/fontawesome-svg-core');
+    iconFunction = icon;
+  })();
+
+  return initializationPromise;
+};
 
 @customElement('fa-icon')
 export class FaIcon extends LitElement {
@@ -25,6 +40,12 @@ export class FaIcon extends LitElement {
 
   @property({ type: String })
   icon = '';
+
+  async connectedCallback() {
+    super.connectedCallback();
+    await initialize();
+    this.requestUpdate();
+  }
 
   private getIconDetails(): { prefix: IconPrefix; name: IconName } | null {
     if (!this.icon) return null;
@@ -49,10 +70,12 @@ export class FaIcon extends LitElement {
   }
 
   render() {
+    if (!iconFunction) return html``;
+
     const iconDetails = this.getIconDetails();
     if (!iconDetails) return html``;
 
-    const iconDef = icon({ prefix: iconDetails.prefix, iconName: iconDetails.name });
+    const iconDef = iconFunction({ prefix: iconDetails.prefix, iconName: iconDetails.name });
 
     if (!iconDef) {
       console.warn(`Icon not found: ${this.icon}`);

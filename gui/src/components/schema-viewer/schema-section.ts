@@ -1,8 +1,10 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import './property-field';
-import '../common/markdown-viewer';
 import '../common/fa-icon';
+import '../common/markdown-viewer';
+
+// Lazy load components
+const PropertyField = () => import('./property-field');
 
 export interface SchemaProperty {
   type: 'string' | 'number' | 'integer' | 'boolean';
@@ -50,6 +52,19 @@ export class SchemaSectionElement extends LitElement {
 
   @property({ type: Object })
   validation: Record<string, ValidationState> = {};
+
+  private subComponentsLoaded = false;
+
+  async connectedCallback() {
+    super.connectedCallback();
+    if (!this.subComponentsLoaded) {
+      await Promise.all([
+        PropertyField(),
+      ]);
+      this.subComponentsLoaded = true;
+      this.requestUpdate();
+    }
+  }
 
   static styles = css`
     :host {

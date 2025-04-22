@@ -1,7 +1,6 @@
 {
-  "name": "vite-starter",
-  "private": true,
-  "version": "0.0.0",
+  "name": "nf-schema-builder-gui",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,11 +8,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.5.1",
+    "@fortawesome/fontawesome-free": "^6.7.2",
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
     "@fortawesome/free-brands-svg-icons": "^6.7.2",
     "@fortawesome/free-regular-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
+    "date-fns": "^4.1.0",
     "lit": "^3.1.0",
     "marked": "^15.0.6",
     "sanitize-html": "^2.11.0"

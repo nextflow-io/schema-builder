@@ -17,12 +17,20 @@ conda activate nf-schema-builder
 pre-commit install
 ```
 
+3. Build GUI assets:
+```bash
+cd gui
+npm install
+npm run build
+```
+
 ### Alternative Installation (pip)
 
 If you prefer using pip directly:
 ```bash
 pip install -e ".[dev]"
 pre-commit install
+cd gui && npm install && npm run build
 ```
 
 ## Usage

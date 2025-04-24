@@ -19,9 +19,8 @@ pre-commit install
 
 3. Build GUI assets:
 ```bash
-cd gui
-npm install
-npm run build
+npm install --prefix gui
+npm run build --prefix gui
 ```
 
 ### Alternative Installation (pip)

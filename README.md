@@ -29,7 +29,7 @@ If you prefer using pip directly:
 ```bash
 pip install -e ".[dev]"
 pre-commit install
-cd gui && npm install && npm run build
+npm install --prefix gui && npm run build --prefix gui
 ```
 
 ## Usage

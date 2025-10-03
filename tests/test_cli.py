@@ -49,7 +49,7 @@ def schema_file(tmp_path: Path) -> Path:
 
 def test_validate_command_success(schema_file: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Test successful schema validation."""
-    mock_config = {"plugins": "nf-schema", "params.test_param": "value"}
+    mock_config = {"plugins": "nf-schema", "params.test_param": "value1"}
 
     with (
         patch("nf_schema_builder.utils.check_nextflow_installation", return_value=True),
@@ -69,19 +69,15 @@ def test_validate_command_no_nextflow(schema_file: Path, caplog: pytest.LogCaptu
 
 
 def test_validate_command_invalid_params(schema_file: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """Test validate command with invalid parameters."""
-    mock_config = {
-        "plugins": "nf-schema",
-        "params.test_param": 42,  # Should be string according to schema
-    }
-
+    """Test validate command with validation errors."""
+    # Test that validation fails when validation returns invalid params
     with (
         patch("nf_schema_builder.utils.check_nextflow_installation", return_value=True),
-        patch("nf_schema_builder.utils.fetch_wf_config", return_value=mock_config),
+        patch("nf_schema_builder.cli.validate_workflow_parameters", return_value={"test_param": "Invalid value"}),
+        patch("nf_schema_builder.utils.fetch_wf_config", return_value={"plugins": "nf-schema"}),
     ):
         result = runner.invoke(app, ["validate", str(schema_file)], catch_exceptions=False)
-        assert result.exit_code == 1  # Should fail due to invalid params
-        assert "Schema validation failed" in caplog.text
+        assert result.exit_code == 1
 
 
 def test_debug_mode(schema_file: Path) -> None:

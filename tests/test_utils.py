@@ -60,10 +60,13 @@ def test_fetch_wf_config(mock_workflow_files: Path, tmp_path: Path) -> None:
     """Test fetching workflow configuration."""
     with (
         patch("nf_schema_builder.utils.check_nextflow_installation") as mock_check,
-        patch("nf_schema_builder.utils.run_cmd") as mock_run,
+        patch("nf_schema_builder.utils.run") as mock_run,
     ):
         mock_check.return_value = True
-        mock_run.return_value = (b"params.test = 'value'\nparams.number = 42\nplugins = 'nf-schema'\n", b"")
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = b"params.test = value\nparams.number = 42\nplugins = nf-schema\n"
+        mock_run.return_value = mock_process
 
         # Test with cache disabled
         config = fetch_wf_config(mock_workflow_files, cache_config=False)

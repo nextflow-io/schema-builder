@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 import typer
 from jsonschema.exceptions import SchemaError, ValidationError
@@ -86,7 +86,7 @@ def main(ctx: typer.Context) -> None:
 @app.command()
 def send(
     schema_file: Annotated[
-        Optional[Path],
+        Path,
         typer.Argument(
             help="Path to the schema file (JSON/YAML)",
             exists=True,
@@ -120,9 +120,6 @@ def send(
 ) -> None:
     """Send schema file to URL for visualization or processing."""
     try:
-        if schema_file is None:
-            schema_file = Path("nextflow_schema.json")
-
         config = CLIConfig(
             schema_file=schema_file,
             url=url,

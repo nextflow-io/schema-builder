@@ -6,7 +6,10 @@
             "test_group": {
                 "type": "object",
                 "properties": {
-                    "test_param": {"type": "string"}
+                    "test_param": {
+                        "type": "string",
+                        "enum": ["value1", "value2"]
+                    }
                 }
             }
         },

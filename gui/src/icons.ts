@@ -30,31 +30,9 @@ export const loadExtendedIcons = async () => {
     await initFontAwesome();
   }
 
-  // Load extended icons (regular + brands)
-  const [
-    // { far },
-    { fab }
-  ] = await Promise.all([
-    // import('@fortawesome/free-regular-svg-icons'),
-    import('@fortawesome/free-brands-svg-icons')
-  ]);
+  // Load extended icons (brands)
+  const { fab } = await import('@fortawesome/free-brands-svg-icons');
 
   library.add(fab);
   return { fab };
-};
-
-// Export a function to load all icons (for backward compatibility)
-export const loadAllIcons = async () => {
-  await initFontAwesome();
-  const { far, fab } = await loadExtendedIcons();
-  const { fas } = await import('@fortawesome/free-solid-svg-icons');
-  return { fas, far, fab };
-};
-
-// Export a function to load only solid icons (most common)
-export const loadSolidIcons = async () => {
-  const library = await initFontAwesome();
-  const { fas } = await import('@fortawesome/free-solid-svg-icons');
-  library.add(fas);
-  return fas;
 };

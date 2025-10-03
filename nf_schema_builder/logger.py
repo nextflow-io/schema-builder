@@ -26,8 +26,5 @@ def set_debug(debug: bool = False) -> None:
     """
     if debug:
         log.setLevel(logging.DEBUG)
-        # Also set rich console options
-        console.options.update(width=120, height=40)
-        logging.basicConfig(handlers=[RichHandler(console=console, rich_tracebacks=False)])
     else:
         log.setLevel(logging.INFO)

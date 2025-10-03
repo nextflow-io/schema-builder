@@ -77,9 +77,7 @@ class CacheManager:
         try:
             with open(cache_file) as f:
                 data = json.load(f)
-                if isinstance(data, dict) and all(
-                    isinstance(k, str) and (isinstance(v, str) or v is None) for k, v in data.items()
-                ):
+                if isinstance(data, dict):
                     return data
                 return None
         except (json.JSONDecodeError, OSError) as e:
@@ -127,7 +125,7 @@ def check_nextflow_installation() -> bool:
 
     """
     try:
-        result = run("nextflow", capture_output=True)
+        result = run(["nextflow", "-version"], capture_output=True)
         return result.returncode == 0
     except FileNotFoundError:
         return False

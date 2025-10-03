@@ -144,8 +144,10 @@ class SchemaServer:
 def cleanup_server() -> None:
     """Clean up server instance and thread on exit."""
     global _server_instance, _server_thread
+    if _server_instance:
+        # Server cleanup is handled by the async cleanup method
+        _server_instance = None
     _server_thread = None
-    _server_instance = None
 
 
 atexit.register(cleanup_server)

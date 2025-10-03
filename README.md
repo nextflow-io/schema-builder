@@ -4,17 +4,16 @@ A minimal CLI tool built with Typer.
 
 ## Installation
 
-### Using Conda (Recommended)
+### Using uv (Recommended)
 
-1. Create and activate the conda environment:
+1. Sync dependencies and create virtual environment:
 ```bash
-conda env create -f environment.yml
-conda activate nf-schema-builder
+uv sync --extra dev
 ```
 
 2. Install pre-commit hooks:
 ```bash
-pre-commit install
+uv run pre-commit install
 ```
 
 3. Build GUI assets:
@@ -35,6 +34,12 @@ npm install --prefix gui && npm run build --prefix gui
 ## Usage
 
 ```bash
+uv run nf-schema-builder send tests/test-schema-full.json
+```
+
+Or activate the virtual environment first:
+```bash
+source .venv/bin/activate
 nf-schema-builder send tests/test-schema-full.json
 ```
 
@@ -51,28 +56,24 @@ This project uses:
 
 ### Setup
 
-1. Install development dependencies:
-
-```bash
-pip install -e ".[dev]"
-```
-
-2. Install pre-commit hooks:
-
-```bash
-pre-commit install
-```
+Follow the installation instructions above using `uv sync --extra dev`.
 
 ### Development Workflow
 
 The pre-commit hooks will automatically run on every commit. You can also run them manually:
 
 ```bash
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 To check types:
 
 ```bash
-pyright nf_schema_builder
+uv run pyright nf_schema_builder
+```
+
+To run tests:
+
+```bash
+uv run pytest
 ```

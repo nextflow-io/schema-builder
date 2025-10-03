@@ -1,20 +1,22 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property, state, query } from 'lit/decorators.js';
-import { SchemaProperty } from './schema-section';
-import '../common/fa-icon';
-import '../common/markdown-viewer';
-import type sanitizeHtml from 'sanitize-html';
+import { LitElement, html, css } from "lit";
+import { customElement, property, state, query } from "lit/decorators.js";
+import { SchemaProperty } from "./schema-section";
+import "../common/fa-icon";
+import "../common/markdown-viewer";
+import type sanitizeHtml from "sanitize-html";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 
 // Lazy load components and dependencies
 const loadDependencies = async () => {
-  const [
-    sanitizeHtmlModule,
-    markedModule,
-  ] = await Promise.all([
-    import('sanitize-html'),
-    import('marked'),
-    import('../common/fa-icon-picker'),
-    import('../common/regex-tester'),
+  const [sanitizeHtmlModule, markedModule] = await Promise.all([
+    import("sanitize-html"),
+    import("marked"),
+    import("../common/fa-icon-picker"),
+    import("../common/regex-tester"),
   ]);
   return {
     sanitizeHtml: sanitizeHtmlModule.default,
@@ -27,7 +29,11 @@ type EditableFields = keyof SchemaProperty;
 @customElement("property-field")
 export class PropertyField extends LitElement {
   @property({ type: String }) name = "";
-  @property({ type: Object }) schemaEntry: SchemaProperty = { type: "string", hidden: false };
+  @property({ type: String }) sectionName = "";
+  @property({ type: Object }) schemaEntry: SchemaProperty = {
+    type: "string",
+    hidden: false,
+  };
   @property({ type: Boolean }) required = false;
   @property({ type: Object }) validation = {};
   @property({ type: Boolean }) isSection = false;
@@ -36,11 +42,19 @@ export class PropertyField extends LitElement {
   @state() private pendingChanges: Partial<SchemaProperty> = {};
   @state() private pendingName: string | null = null;
   @query("input, textarea, select") private inputElement?: HTMLElement;
+  @query(".property-container") private containerElement?: HTMLElement;
+  @query(".drag-handle") private dragHandleElement?: HTMLElement;
   @state() private processedDescription = "";
   @state() private processedHelpText = "";
+  @state() private isDragging = false;
+  @state() private isDragOver = false;
 
-  private deps: { sanitizeHtml: typeof sanitizeHtml; marked: typeof import("marked").marked } | null = null;
+  private deps: {
+    sanitizeHtml: typeof sanitizeHtml;
+    marked: typeof import("marked").marked;
+  } | null = null;
   private subComponentsLoaded = false;
+  private cleanupDragAndDrop?: () => void;
 
   private handleGlobalEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -65,6 +79,107 @@ export class PropertyField extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     document.removeEventListener("keydown", this.handleGlobalEscape);
+    this.cleanupDragAndDrop?.();
+  }
+
+  private setupDragAndDrop() {
+    console.log("Setting up drag and drop");
+    if (!this.containerElement || !this.dragHandleElement || this.isSection) {
+      console.log("Drag and drop setup skipped", {
+        hasContainer: !!this.containerElement,
+        hasHandle: !!this.dragHandleElement,
+        isSection: this.isSection,
+      });
+      return;
+    }
+    console.log("Drag handle element:", this.dragHandleElement);
+    console.log("Container element:", this.containerElement);
+
+    // Verify draggable function exists
+    console.log("draggable function:", typeof draggable);
+    console.log(
+      "dropTargetForElements function:",
+      typeof dropTargetForElements,
+    );
+
+    try {
+      this.cleanupDragAndDrop = combine(
+        draggable({
+          element: this.dragHandleElement,
+          getInitialData: () => {
+            console.log("Getting initial drag data for:", this.name);
+            return {
+              name: this.name,
+              type: "property-field",
+              sectionName: this.sectionName,
+            };
+          },
+          onDragStart: () => {
+            console.log("Drag started for:", this.name);
+            this.isDragging = true;
+          },
+          onDrop: () => {
+            console.log("Drag ended for:", this.name);
+            this.isDragging = false;
+          },
+          onGenerateDragPreview: () => {
+            console.log("Generating drag preview");
+          },
+        }),
+        dropTargetForElements({
+          element: this.containerElement,
+          canDrop: ({ source }) => {
+            return (
+              source.data.type === "property-field" &&
+              source.data.name !== this.name
+            );
+          },
+          onDragEnter: () => {
+            console.log("Drag enter property:", this.name);
+            this.isDragOver = true;
+          },
+          onDragLeave: () => {
+            console.log("Drag leave property:", this.name);
+            this.isDragOver = false;
+          },
+          onDrop: ({ source }) => {
+            this.isDragOver = false;
+            const draggedName = source.data.name as string;
+            const draggedSection = source.data.sectionName as string;
+
+            if (draggedName && draggedName !== this.name) {
+              // Check if it's a cross-section move
+              if (draggedSection && draggedSection !== this.sectionName) {
+                this.dispatchEvent(
+                  new CustomEvent("property-move-between-sections", {
+                    detail: {
+                      propertyName: draggedName,
+                      sourceSection: draggedSection,
+                      targetSection: this.sectionName,
+                      targetProperty: this.name,
+                    },
+                    bubbles: true,
+                    composed: true,
+                  }),
+                );
+              } else {
+                // Same section reorder
+                this.dispatchEvent(
+                  new CustomEvent("property-reorder", {
+                    detail: { draggedName, targetName: this.name },
+                    bubbles: true,
+                    composed: true,
+                  }),
+                );
+              }
+            }
+          },
+        }),
+      );
+      console.log("Drag and drop setup completed successfully");
+    } catch (error) {
+      console.error("Error setting up drag and drop:", error);
+    }
   }
 
   static styles = css`
@@ -76,6 +191,61 @@ export class PropertyField extends LitElement {
       border: 1px solid var(--border-color);
       border-radius: 4px;
       padding: 1rem;
+      transition:
+        opacity 0.2s,
+        border-color 0.2s,
+        box-shadow 0.2s;
+    }
+
+    .property-container.is-dragging {
+      opacity: 0.5;
+    }
+
+    .property-container.is-drag-over {
+      border-color: var(--primary-color) !important;
+      box-shadow: 0 0 0 3px rgba(26, 150, 85, 0.5) !important;
+      background: rgba(26, 150, 85, 0.1) !important;
+      position: relative;
+    }
+
+    .property-container.is-drag-over::before {
+      content: "▼ Drop here";
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--primary-color);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    .drag-handle {
+      cursor: grab;
+      color: var(--text-muted);
+      padding: 0.25rem;
+      margin-right: 0.5rem;
+      display: inline-flex;
+      align-items: center;
+      opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+
+    .drag-handle:hover {
+      opacity: 1;
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .drag-handle * {
+      pointer-events: none;
+      user-select: none;
     }
 
     /* Remove border when this is the first property in a section (section header) */
@@ -318,7 +488,6 @@ export class PropertyField extends LitElement {
       }
     }
 
-
     .toggle-label {
       display: inline-flex;
       align-items: center;
@@ -405,7 +574,6 @@ export class PropertyField extends LitElement {
       margin: 0;
     }
 
-
     .section-description .field-content {
       border: none;
       padding: 0;
@@ -417,7 +585,6 @@ export class PropertyField extends LitElement {
     .section-description .field-wrapper {
       min-height: unset;
     }
-
   `;
 
   private handlePropertyUpdate(field: EditableFields, value: any) {
@@ -428,7 +595,7 @@ export class PropertyField extends LitElement {
       JSON.stringify({
         ...this.schemaEntry,
         [field]: value,
-      })
+      }),
     );
 
     // Send the update event to the parent
@@ -442,7 +609,10 @@ export class PropertyField extends LitElement {
     });
 
     // Dispatch the event
-    console.log(`Dispatching property-update event for ${this.name}:`, updatedEntry);
+    console.log(
+      `Dispatching property-update event for ${this.name}:`,
+      updatedEntry,
+    );
     this.dispatchEvent(event);
 
     // Update local state
@@ -473,7 +643,9 @@ export class PropertyField extends LitElement {
     });
 
     // Dispatch the event
-    console.log(`Dispatching name-update event from ${this.name} to ${newName}`);
+    console.log(
+      `Dispatching name-update event from ${this.name} to ${newName}`,
+    );
     this.dispatchEvent(event);
 
     // Update local state
@@ -526,11 +698,23 @@ export class PropertyField extends LitElement {
 
     if (changedProperties.has("schemaEntry")) {
       console.log("schemaEntry updated:", this.schemaEntry);
-      this.processedDescription = await this.parseMarkdown(this.schemaEntry.description);
-      this.processedHelpText = await this.parseMarkdown(this.schemaEntry.help_text);
+      this.processedDescription = await this.parseMarkdown(
+        this.schemaEntry.description,
+      );
+      this.processedHelpText = await this.parseMarkdown(
+        this.schemaEntry.help_text,
+      );
 
       // Force a complete re-render of the component
       this.requestUpdate();
+    }
+    // Set up drag and drop after first render
+    if (
+      this.containerElement &&
+      this.dragHandleElement &&
+      !this.cleanupDragAndDrop
+    ) {
+      this.setupDragAndDrop();
     }
   }
 
@@ -556,17 +740,24 @@ export class PropertyField extends LitElement {
 
   private renderFieldEditor(field: EditableFields) {
     const value = this.pendingChanges[field] ?? this.schemaEntry[field];
-    const isNumeric = field === "minimum" || field === "maximum" || field === "multipleOf";
+    const isNumeric =
+      field === "minimum" || field === "maximum" || field === "multipleOf";
 
     if (field === "type") {
       return html`
         <select
           autofocus
           .value=${value}
-          @change=${(e: Event) => this.handleInputChange(field, (e.target as HTMLSelectElement).value)}
+          @change=${(e: Event) =>
+            this.handleInputChange(
+              field,
+              (e.target as HTMLSelectElement).value,
+            )}
         >
           ${["string", "number", "integer", "boolean"].map(
-            (type) => html` <option value=${type} ?selected=${type === value}>${type}</option> `
+            (type) => html`
+              <option value=${type} ?selected=${type === value}>${type}</option>
+            `,
           )}
         </select>
       `;
@@ -577,7 +768,11 @@ export class PropertyField extends LitElement {
         <textarea
           autofocus
           .value=${value || ""}
-          @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLTextAreaElement).value)}
+          @input=${(e: Event) =>
+            this.handleInputChange(
+              field,
+              (e.target as HTMLTextAreaElement).value,
+            )}
           @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
         ></textarea>
       `;
@@ -590,7 +785,11 @@ export class PropertyField extends LitElement {
           <select
             autofocus
             .value=${value || "false"}
-            @change=${(e: Event) => this.handleInputChange(field, (e.target as HTMLSelectElement).value)}
+            @change=${(e: Event) =>
+              this.handleInputChange(
+                field,
+                (e.target as HTMLSelectElement).value,
+              )}
           >
             <option value="true">true</option>
             <option value="false">false</option>
@@ -598,13 +797,18 @@ export class PropertyField extends LitElement {
         `;
       }
 
-      const isInvalid = isDefaultField && this.schemaEntry.type === "string" && !this.validateAgainstPattern(value);
+      const isInvalid =
+        isDefaultField &&
+        this.schemaEntry.type === "string" &&
+        !this.validateAgainstPattern(value);
 
       return html`
         <div>
           <input
             autofocus
-            type=${this.schemaEntry.type === "number" || this.schemaEntry.type === "integer" || isNumeric
+            type=${this.schemaEntry.type === "number" ||
+            this.schemaEntry.type === "integer" ||
+            isNumeric
               ? "number"
               : "text"}
             class=${isInvalid ? "input-invalid" : ""}
@@ -623,7 +827,8 @@ export class PropertyField extends LitElement {
           ${isInvalid
             ? html`
                 <div class="validation-message">
-                  Default value does not match pattern: <code>${this.schemaEntry.pattern}</code>
+                  Default value does not match pattern:
+                  <code>${this.schemaEntry.pattern}</code>
                 </div>
               `
             : ""}
@@ -639,10 +844,17 @@ export class PropertyField extends LitElement {
             type="text"
             placeholder="Regular expression pattern"
             .value=${value || ""}
-            @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLInputElement).value)}
+            @input=${(e: Event) =>
+              this.handleInputChange(
+                field,
+                (e.target as HTMLInputElement).value,
+              )}
             @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
           />
-          <regex-tester .pattern=${value || ""} .defaultValue=${this.schemaEntry.default || ""}></regex-tester>
+          <regex-tester
+            .pattern=${value || ""}
+            .defaultValue=${this.schemaEntry.default || ""}
+          ></regex-tester>
         </div>
       `;
     }
@@ -652,7 +864,8 @@ export class PropertyField extends LitElement {
         autofocus
         type="text"
         .value=${value || ""}
-        @input=${(e: Event) => this.handleInputChange(field, (e.target as HTMLInputElement).value)}
+        @input=${(e: Event) =>
+          this.handleInputChange(field, (e.target as HTMLInputElement).value)}
         @keydown=${(e: KeyboardEvent) => this.handleKeyDown(e, field)}
       />
     `;
@@ -660,14 +873,15 @@ export class PropertyField extends LitElement {
 
   private renderField(field: string, defaultContent: any, isMarkdown = false) {
     const label = field.replace(/([A-Z])/g, " $1").toLowerCase();
-    const content = this.pendingChanges[field as keyof SchemaProperty] ?? defaultContent;
+    const content =
+      this.pendingChanges[field as keyof SchemaProperty] ?? defaultContent;
     const displayContent = isMarkdown
       ? html`<markdown-viewer
           .content=${field === "description"
-            ? this.schemaEntry.description || ''
+            ? this.schemaEntry.description || ""
             : field === "help_text"
-            ? this.schemaEntry.help_text || ''
-            : content}
+              ? this.schemaEntry.help_text || ""
+              : content}
         ></markdown-viewer>`
       : content;
 
@@ -682,12 +896,18 @@ export class PropertyField extends LitElement {
                   <div class="actions">
                     <button
                       class="save-button"
-                      @click=${() => field in this.pendingChanges ? this.saveEdit(field as EditableFields) : this.cancelEdit()}
+                      @click=${() =>
+                        field in this.pendingChanges
+                          ? this.saveEdit(field as EditableFields)
+                          : this.cancelEdit()}
                     >
                       <fa-icon icon="fas fa-check"></fa-icon>
                       Save
                     </button>
-                    <button class="cancel-button" @click=${() => this.cancelEdit()}>
+                    <button
+                      class="cancel-button"
+                      @click=${() => this.cancelEdit()}
+                    >
                       <fa-icon icon="fas fa-times"></fa-icon>
                       Cancel
                     </button>
@@ -696,7 +916,9 @@ export class PropertyField extends LitElement {
               `
             : html`
                 <div
-                  class="field-content border ${content === defaultContent ? "text-muted" : ""}"
+                  class="field-content border ${content === defaultContent
+                    ? "text-muted"
+                    : ""}"
                   @click=${() => (this.editingField = field)}
                 >
                   ${displayContent}
@@ -718,12 +940,22 @@ export class PropertyField extends LitElement {
                   class="property-type"
                   .value=${this.schemaEntry.type}
                   @change=${(e: Event) => {
-                    this.handlePropertyUpdate("type", (e.target as HTMLSelectElement).value);
+                    this.handlePropertyUpdate(
+                      "type",
+                      (e.target as HTMLSelectElement).value,
+                    );
                     this.editingField = null;
                   }}
                 >
                   ${["string", "number", "integer", "boolean"].map(
-                    (type) => html` <option value=${type} ?selected=${type === this.schemaEntry.type}>${type}</option> `
+                    (type) => html`
+                      <option
+                        value=${type}
+                        ?selected=${type === this.schemaEntry.type}
+                      >
+                        ${type}
+                      </option>
+                    `,
                   )}
                 </select>
                 ${this.renderCancelButton()}
@@ -738,7 +970,10 @@ export class PropertyField extends LitElement {
     return html`
       <div class="field-group">
         <div class="field-label">Required</div>
-        <div class="field-wrapper" @click=${() => (this.editingField = "required")}>
+        <div
+          class="field-wrapper"
+          @click=${() => (this.editingField = "required")}
+        >
           ${this.editingField === "required"
             ? html`
                 <select
@@ -746,13 +981,14 @@ export class PropertyField extends LitElement {
                   class="property-type"
                   .value=${this.required ? "true" : "false"}
                   @change=${(e: Event) => {
-                    const isRequired = (e.target as HTMLSelectElement).value === "true";
+                    const isRequired =
+                      (e.target as HTMLSelectElement).value === "true";
                     this.dispatchEvent(
                       new CustomEvent("required-update", {
                         detail: { name: this.name, required: isRequired },
                         bubbles: true,
                         composed: true,
-                      })
+                      }),
                     );
                     this.editingField = null;
                   }}
@@ -762,7 +998,9 @@ export class PropertyField extends LitElement {
                 </select>
                 ${this.renderCancelButton()}
               `
-            : html`<span class="property-required">${this.required ? "true" : "false"}</span>`}
+            : html`<span class="property-required"
+                >${this.required ? "true" : "false"}</span
+              >`}
         </div>
       </div>
     `;
@@ -772,14 +1010,20 @@ export class PropertyField extends LitElement {
     return html`
       <div class="field-group">
         <div class="field-label">Hidden</div>
-        <div class="field-wrapper" @click=${() => (this.editingField = "hidden")}>
+        <div
+          class="field-wrapper"
+          @click=${() => (this.editingField = "hidden")}
+        >
           ${this.editingField === "hidden"
             ? html`
                 <select
                   class="property-type"
                   .value=${this.schemaEntry.hidden ? "true" : "false"}
                   @change=${(e: Event) => {
-                    this.handlePropertyUpdate("hidden", (e.target as HTMLSelectElement).value === "true");
+                    this.handlePropertyUpdate(
+                      "hidden",
+                      (e.target as HTMLSelectElement).value === "true",
+                    );
                     this.editingField = null;
                   }}
                 >
@@ -788,7 +1032,9 @@ export class PropertyField extends LitElement {
                 </select>
                 ${this.renderCancelButton()}
               `
-            : html`<span class="hidden-badge">${this.schemaEntry.hidden ? "true" : "false"}</span>`}
+            : html`<span class="hidden-badge"
+                >${this.schemaEntry.hidden ? "true" : "false"}</span
+              >`}
         </div>
       </div>
     `;
@@ -811,9 +1057,18 @@ export class PropertyField extends LitElement {
   private renderIconPicker() {
     if (!this.showingIconPicker) return "";
     return html`
-      <div class="icon-picker-overlay" @click=${() => (this.showingIconPicker = false)}>
-        <div class="icon-picker-container" @click=${(e: Event) => e.stopPropagation()}>
-          <button class="close-picker" @click=${() => (this.showingIconPicker = false)}>
+      <div
+        class="icon-picker-overlay"
+        @click=${() => (this.showingIconPicker = false)}
+      >
+        <div
+          class="icon-picker-container"
+          @click=${(e: Event) => e.stopPropagation()}
+        >
+          <button
+            class="close-picker"
+            @click=${() => (this.showingIconPicker = false)}
+          >
             <fa-icon icon="fas fa-times"></fa-icon>
           </button>
           <fa-icon-picker
@@ -860,7 +1115,8 @@ export class PropertyField extends LitElement {
                           this.handleNameUpdate(this.pendingName);
                         }
                       }}
-                      ?disabled=${!this.pendingName || this.pendingName === this.name}
+                      ?disabled=${!this.pendingName ||
+                      this.pendingName === this.name}
                     >
                       <fa-icon icon="fas fa-check"></fa-icon>
                       Save
@@ -878,7 +1134,12 @@ export class PropertyField extends LitElement {
                   </div>
                 </div>
               `
-            : html`<div class="field-content" @click=${() => (this.editingField = "name")}>${this.name || ""}</div>`}
+            : html`<div
+                class="field-content"
+                @click=${() => (this.editingField = "name")}
+              >
+                ${this.name || ""}
+              </div>`}
         </div>
       </div>
     `;
@@ -887,57 +1148,84 @@ export class PropertyField extends LitElement {
   render() {
     const { name, schemaEntry } = this;
     const iconName = schemaEntry.fa_icon || "fas fa-question-circle";
-    const isNumeric = schemaEntry.type === "number" || schemaEntry.type === "integer";
+    const isNumeric =
+      schemaEntry.type === "number" || schemaEntry.type === "integer";
 
     return html`
-      <div class="property-container">
+      <div
+        class="property-container ${this.isDragging ? "is-dragging" : ""} ${this
+          .isDragOver
+          ? "is-drag-over"
+          : ""}"
+      >
         <div class="property-header">
-          <fa-icon class="property-icon" icon=${iconName} @click=${() => (this.showingIconPicker = true)}></fa-icon>
+          ${!this.isSection
+            ? html`<div
+                class="drag-handle"
+                @dragstart=${(e: DragEvent) =>
+                  console.log("Native dragstart event!", e)}
+                @drag=${() => console.log("Native drag event")}
+              >
+                <fa-icon icon="fas fa-grip-vertical"></fa-icon>
+              </div>`
+            : ""}
+          <fa-icon
+            class="property-icon"
+            icon=${iconName}
+            @click=${() => (this.showingIconPicker = true)}
+          ></fa-icon>
           ${this.renderNameField()}
-          ${!this.isSection ? html`
-            ${this.renderTypeField()}
-            ${this.renderRequiredField()}
-            ${this.renderHiddenField()}
-          ` : html`
-            <div class="section-description">
+          ${!this.isSection
+            ? html`
+                ${this.renderTypeField()} ${this.renderRequiredField()}
+                ${this.renderHiddenField()}
+              `
+            : html`
+                <div class="section-description">
+                  ${schemaEntry.description
+                    ? this.renderField(
+                        "description",
+                        schemaEntry.description,
+                        true,
+                      )
+                    : this.renderField("description", "Add description...")}
+                </div>
+              `}
+        </div>
+
+        ${!this.isSection
+          ? html`
               ${schemaEntry.description
                 ? this.renderField("description", schemaEntry.description, true)
                 : this.renderField("description", "Add description...")}
-            </div>
-          `}
-        </div>
-
-        ${!this.isSection ? html`
-          ${schemaEntry.description
-            ? this.renderField("description", schemaEntry.description, true)
-            : this.renderField("description", "Add description...")}
-          ${schemaEntry.help_text
-            ? this.renderField("help_text", schemaEntry.help_text, true)
-            : this.renderField("help_text", "Add help text...")}
-          ${schemaEntry.default
-            ? this.renderField("default", schemaEntry.default)
-            : this.renderField("default", "Add default value...")}
-          ${isNumeric
-            ? html`
-                ${schemaEntry.minimum !== undefined
-                  ? this.renderField("minimum", schemaEntry.minimum)
-                  : this.renderField("minimum", "Add minimum...")}
-                ${schemaEntry.maximum !== undefined
-                  ? this.renderField("maximum", schemaEntry.maximum)
-                  : this.renderField("maximum", "Add maximum...")}
-                ${schemaEntry.multipleOf !== undefined
-                  ? this.renderField("multipleOf", schemaEntry.multipleOf)
-                  : this.renderField("multipleOf", "Add multiple of...")}
-              `
-            : ""}
-          ${schemaEntry.type === "string"
-            ? html`
-                ${schemaEntry.pattern !== undefined
-                  ? this.renderField("pattern", schemaEntry.pattern)
-                  : this.renderField("pattern", "Add pattern...")}
-              `
-            : ""}
-        ` : ''}
+              ${schemaEntry.help_text
+                ? this.renderField("help_text", schemaEntry.help_text, true)
+                : this.renderField("help_text", "Add help text...")}
+              ${schemaEntry.default
+                ? this.renderField("default", schemaEntry.default)
+                : this.renderField("default", "Add default value...")}
+              ${isNumeric
+                ? html`
+                    ${schemaEntry.minimum !== undefined
+                      ? this.renderField("minimum", schemaEntry.minimum)
+                      : this.renderField("minimum", "Add minimum...")}
+                    ${schemaEntry.maximum !== undefined
+                      ? this.renderField("maximum", schemaEntry.maximum)
+                      : this.renderField("maximum", "Add maximum...")}
+                    ${schemaEntry.multipleOf !== undefined
+                      ? this.renderField("multipleOf", schemaEntry.multipleOf)
+                      : this.renderField("multipleOf", "Add multiple of...")}
+                  `
+                : ""}
+              ${schemaEntry.type === "string"
+                ? html`
+                    ${schemaEntry.pattern !== undefined
+                      ? this.renderField("pattern", schemaEntry.pattern)
+                      : this.renderField("pattern", "Add pattern...")}
+                  `
+                : ""}
+            `
+          : ""}
         ${this.renderIconPicker()}
       </div>
     `;

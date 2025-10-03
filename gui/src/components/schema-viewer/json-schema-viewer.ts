@@ -4,7 +4,7 @@ import "../common/fa-icon";
 // Lazy load components
 const SchemaSection = () => import("./schema-section");
 const CodePreview = () => import("./code-preview");
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from "date-fns";
 
 interface JsonSchema {
   $schema?: string;
@@ -41,27 +41,29 @@ interface SchemaDef {
 @customElement("json-schema-viewer")
 export class JsonSchemaViewer extends LitElement {
   @state() private schema: JsonSchema = { $defs: {} };
-  @state() private serverStatus: 'connected' | 'disconnected' = 'disconnected';
-  @state() private lastSaveStatus: 'success' | 'error' | null = null;
+  @state() private serverStatus: "connected" | "disconnected" = "disconnected";
+  @state() private lastSaveStatus: "success" | "error" | null = null;
   @state() private lastSaveTime: Date | null = null;
   private healthCheckInterval: number | null = null;
+  private isUsingDummySchema = false;
 
   // Default to localhost:5173 if we're in development
-  private baseUrl = window.location.hostname === 'localhost'
-    ? 'http://localhost:5173'
-    : `http://${window.location.host}`;
+  private baseUrl =
+    window.location.hostname === "localhost"
+      ? "http://localhost:5173"
+      : `http://${window.location.host}`;
 
   async connectedCallback() {
     super.connectedCallback();
     // Preload components
-    await Promise.all([
-      SchemaSection(),
-      CodePreview()
-    ]);
-    console.log('Connecting to server at:', this.baseUrl);
+    await Promise.all([SchemaSection(), CodePreview()]);
+    console.log("Connecting to server at:", this.baseUrl);
     await this.startHealthCheck();
-    if (this.serverStatus === 'connected') {
+    if (this.serverStatus === "connected") {
       await this.fetchSchema();
+    } else {
+      // Load dummy schema when not connected to backend
+      this.loadDummySchema();
     }
   }
 
@@ -80,8 +82,11 @@ export class JsonSchemaViewer extends LitElement {
     // Then check every 5 seconds
     this.healthCheckInterval = window.setInterval(async () => {
       await this.checkHealth();
-      // If we're connected but don't have a schema, try to fetch it
-      if (this.serverStatus === 'connected' && !this.schema.$defs) {
+      // If we're connected but don't have a schema or using dummy schema, try to fetch it
+      if (
+        this.serverStatus === "connected" &&
+        (!this.schema.$defs || this.isUsingDummySchema)
+      ) {
         await this.fetchSchema();
       }
     }, 5000);
@@ -91,51 +96,124 @@ export class JsonSchemaViewer extends LitElement {
     try {
       const response = await fetch(`${this.baseUrl}/api/health`);
       if (response.ok) {
-        this.serverStatus = 'connected';
+        this.serverStatus = "connected";
       } else {
-        console.warn('Health check failed with status:', response.status);
-        this.serverStatus = 'disconnected';
+        console.warn("Health check failed with status:", response.status);
+        this.serverStatus = "disconnected";
       }
     } catch (error) {
       console.error("Health check failed:", error);
-      this.serverStatus = 'disconnected';
+      this.serverStatus = "disconnected";
     }
   }
 
   private async fetchSchema() {
     try {
-      console.log('Fetching schema from:', `${this.baseUrl}/api/schema`);
+      console.log("Fetching schema from:", `${this.baseUrl}/api/schema`);
       const response = await fetch(`${this.baseUrl}/api/schema`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data: ApiResponse<JsonSchema> = await response.json();
-      console.log('Received schema response:', data);
+      console.log("Received schema response:", data);
 
       if (data.status === "success" && data.data) {
-        console.log('Setting schema to:', data.data);
+        console.log("Setting schema to:", data.data);
         // Ensure we have a valid schema structure
         this.schema = {
           $defs: data.data.$defs || {},
-          ...data.data
+          ...data.data,
         };
-        console.log('Schema after update:', this.schema);
+        this.isUsingDummySchema = false;
+        console.log("Schema after update:", this.schema);
         this.requestUpdate();
       } else {
-        console.warn('Received invalid schema data:', data);
+        console.warn("Received invalid schema data:", data);
       }
     } catch (error) {
-      console.error('Error fetching schema:', error);
+      console.error("Error fetching schema:", error);
     }
+  }
+
+  private loadDummySchema() {
+    console.log("Loading dummy schema for development");
+    this.isUsingDummySchema = true;
+    this.schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      title: "Example Nextflow Pipeline",
+      description: "An example pipeline schema for development",
+      $defs: {
+        input_output_options: {
+          title: "Input/Output Options",
+          description:
+            "Define where the pipeline should find input data and save output data",
+          fa_icon: "fas fa-folder-open",
+          properties: {
+            input: {
+              type: "string",
+              format: "file-path",
+              description: "Path to the input samplesheet",
+              help_text:
+                "Provide a path to a CSV or TSV file containing sample information",
+            },
+            outdir: {
+              type: "string",
+              format: "directory-path",
+              description: "The output directory where results will be saved",
+              default: "./results",
+            },
+          },
+          required: ["input"],
+        },
+        reference_genome_options: {
+          title: "Reference Genome Options",
+          description: "Reference genome related files and options",
+          fa_icon: "fas fa-dna",
+          properties: {
+            genome: {
+              type: "string",
+              description: "Name of reference genome",
+              enum: ["GRCh38", "GRCh37", "GRCm38"],
+              help_text: "Select a reference genome from the dropdown",
+            },
+            fasta: {
+              type: "string",
+              format: "file-path",
+              description: "Path to FASTA genome file",
+              help_text:
+                "If not using a reference genome, provide the path to the FASTA file",
+            },
+          },
+        },
+        generic_options: {
+          title: "Generic Options",
+          description: "Less commonly used options",
+          fa_icon: "fas fa-cog",
+          properties: {
+            help: {
+              type: "boolean",
+              description: "Display help text",
+              default: false,
+            },
+            version: {
+              type: "boolean",
+              description: "Display version and exit",
+              default: false,
+            },
+          },
+        },
+      },
+    };
+    this.requestUpdate();
   }
 
   private async handleSave() {
     try {
-      console.log('Saving schema:', this.schema);
+      console.log("Saving schema:", this.schema);
       const response = await fetch(`${this.baseUrl}/api/schema`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(this.schema),
       });
@@ -145,10 +223,10 @@ export class JsonSchemaViewer extends LitElement {
       }
 
       const data: ApiResponse = await response.json();
-      console.log('Save response:', data);
+      console.log("Save response:", data);
 
       if (data.status === "success") {
-        this.lastSaveStatus = 'success';
+        this.lastSaveStatus = "success";
         this.lastSaveTime = new Date();
         console.log("Schema saved successfully");
         // Refresh the schema to ensure we have the latest version
@@ -159,7 +237,7 @@ export class JsonSchemaViewer extends LitElement {
 
       return data;
     } catch (error) {
-      this.lastSaveStatus = 'error';
+      this.lastSaveStatus = "error";
       console.error("Failed to save schema:", error);
       throw error;
     }
@@ -170,11 +248,11 @@ export class JsonSchemaViewer extends LitElement {
       // Save one last time before finishing
       await this.handleSave();
 
-      console.log('Sending finish command to:', `${this.baseUrl}/api/finish`);
+      console.log("Sending finish command to:", `${this.baseUrl}/api/finish`);
       const response = await fetch(`${this.baseUrl}/api/finish`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
@@ -193,20 +271,23 @@ export class JsonSchemaViewer extends LitElement {
     } catch (error) {
       console.error("Error during finish:", error);
       // Show error to user
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       alert(`Failed to finish: ${errorMessage}`);
     }
   }
 
   private normalizeKey(title: string): string {
-    return title
-      .toLowerCase()
-      // Replace spaces and special characters with underscores
-      .replace(/[^a-z0-9]+/g, '_')
-      // Remove leading/trailing underscores
-      .replace(/^_+|_+$/g, '')
-      // Replace multiple consecutive underscores with a single one
-      .replace(/_+/g, '_');
+    return (
+      title
+        .toLowerCase()
+        // Replace spaces and special characters with underscores
+        .replace(/[^a-z0-9]+/g, "_")
+        // Remove leading/trailing underscores
+        .replace(/^_+|_+$/g, "")
+        // Replace multiple consecutive underscores with a single one
+        .replace(/_+/g, "_")
+    );
   }
 
   private async handleSchemaUpdate(name: string, section: Partial<SchemaDef>) {
@@ -216,19 +297,23 @@ export class JsonSchemaViewer extends LitElement {
       const currentDefs = currentSchema.$defs || {};
 
       // Find the original key in $defs that matches this section
-      const originalKey = Object.keys(currentDefs).find(key => {
+      const originalKey = Object.keys(currentDefs).find((key) => {
         const def = currentDefs[key];
-        return def.title === name || key === name.toLowerCase().replace(/\s+/g, '_');
+        return (
+          def.title === name || key === name.toLowerCase().replace(/\s+/g, "_")
+        );
       });
 
       // Generate the new key from the section title or name
       const newKey = this.normalizeKey(section.title || name);
 
-      console.log(`Section update: Original key: ${originalKey}, New key: ${newKey}`);
-      console.log('Section update received:', section);
+      console.log(
+        `Section update: Original key: ${originalKey}, New key: ${newKey}`,
+      );
+      console.log("Section update received:", section);
 
       // Create new $defs object with proper typing
-      const newDefs: Required<JsonSchema>['$defs'] = {};
+      const newDefs: Required<JsonSchema>["$defs"] = {};
 
       // Copy all properties except the original key, maintaining order
       Object.entries(currentDefs).forEach(([key, value]) => {
@@ -238,9 +323,9 @@ export class JsonSchemaViewer extends LitElement {
         // When we reach the original key's position, insert the updated section with new key
         if (key === originalKey) {
           newDefs[newKey] = {
-            ...(originalKey ? currentDefs[originalKey] as SchemaDef : {}),  // Preserve existing fields
-            ...section,  // Apply updates
-            title: section.title || name,  // Use section.title if provided, otherwise use name
+            ...(originalKey ? (currentDefs[originalKey] as SchemaDef) : {}), // Preserve existing fields
+            ...section, // Apply updates
+            title: section.title || name, // Use section.title if provided, otherwise use name
           } as SchemaDef;
         }
       });
@@ -259,7 +344,7 @@ export class JsonSchemaViewer extends LitElement {
         $defs: newDefs,
       };
 
-      console.log('Updated schema:', updatedSchema);
+      console.log("Updated schema:", updatedSchema);
 
       // Update the local state
       this.schema = updatedSchema;
@@ -270,8 +355,211 @@ export class JsonSchemaViewer extends LitElement {
       // Auto-save on every change
       await this.handleSave();
     } catch (error) {
-      console.error('Error updating schema:', error);
+      console.error("Error updating schema:", error);
     }
+  }
+
+  private async handleSectionReorder(e: CustomEvent) {
+    e.stopPropagation();
+    const { draggedName, targetName } = e.detail;
+    console.log(`Reordering sections: ${draggedName} -> ${targetName}`);
+
+    const currentDefs = this.schema.$defs || {};
+    const defKeys = Object.keys(currentDefs);
+
+    // Find the keys for the dragged and target sections
+    const draggedKey = defKeys.find(
+      (key) => currentDefs[key].title === draggedName,
+    );
+    const targetKey = defKeys.find(
+      (key) => currentDefs[key].title === targetName,
+    );
+
+    if (!draggedKey || !targetKey) return;
+
+    const draggedIndex = defKeys.indexOf(draggedKey);
+    const targetIndex = defKeys.indexOf(targetKey);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Create new ordered keys array
+    const newDefKeys = [...defKeys];
+    newDefKeys.splice(draggedIndex, 1);
+    newDefKeys.splice(targetIndex, 0, draggedKey);
+
+    // Create reordered $defs object
+    const reorderedDefs: Required<JsonSchema>["$defs"] = {};
+    for (const key of newDefKeys) {
+      reorderedDefs[key] = currentDefs[key];
+    }
+
+    // Update the schema with reordered sections
+    this.schema = {
+      ...this.schema,
+      $defs: reorderedDefs,
+    };
+
+    this.requestUpdate();
+
+    // Auto-save on every change
+    await this.handleSave();
+  }
+
+  private async handlePropertyMoveToSection(e: CustomEvent) {
+    e.stopPropagation();
+    const { propertyName, targetSection: targetSectionName } = e.detail;
+    console.log(
+      `Moving property ${propertyName} to section ${targetSectionName}`,
+    );
+
+    // Find source section and property
+    const currentDefs = this.schema.$defs || {};
+    let sourceSection: any = null;
+    let sourceSectionKey: string | null = null;
+
+    for (const [key, def] of Object.entries(currentDefs)) {
+      if (def.properties && propertyName in def.properties) {
+        sourceSection = def;
+        sourceSectionKey = key;
+        break;
+      }
+    }
+
+    if (!sourceSection || !sourceSectionKey) return;
+
+    // Find target section
+    const targetSectionKey = Object.keys(currentDefs).find(
+      (key) => currentDefs[key].title === targetSectionName,
+    );
+
+    if (!targetSectionKey) return;
+
+    // Get the property to move
+    const propertyToMove = sourceSection.properties[propertyName];
+    const isRequired = (sourceSection.required || []).includes(propertyName);
+
+    // Remove from source
+    const { [propertyName]: removed, ...remainingProps } =
+      sourceSection.properties;
+    const updatedSourceRequired = (sourceSection.required || []).filter(
+      (r: string) => r !== propertyName,
+    );
+
+    // Add to target (at the end)
+    const targetSectionDef = currentDefs[targetSectionKey];
+    const updatedTargetProps = {
+      ...(targetSectionDef.properties || {}),
+      [propertyName]: propertyToMove,
+    };
+    const updatedTargetRequired = isRequired
+      ? [...(targetSectionDef.required || []), propertyName]
+      : targetSectionDef.required || [];
+
+    // Update schema
+    this.schema = {
+      ...this.schema,
+      $defs: {
+        ...currentDefs,
+        [sourceSectionKey]: {
+          ...sourceSection,
+          properties: remainingProps,
+          required: updatedSourceRequired,
+        },
+        [targetSectionKey]: {
+          ...targetSectionDef,
+          properties: updatedTargetProps,
+          required: updatedTargetRequired,
+        },
+      },
+    };
+
+    this.requestUpdate();
+    await this.handleSave();
+  }
+
+  private async handlePropertyMoveBetweenSections(e: CustomEvent) {
+    e.stopPropagation();
+    const { propertyName, sourceSection, targetSection, targetProperty } =
+      e.detail;
+    console.log(
+      `Moving property ${propertyName} from ${sourceSection} to ${targetSection}, before ${targetProperty}`,
+    );
+
+    const currentDefs = this.schema.$defs || {};
+
+    // Find source section key
+    const sourceSectionKey = Object.keys(currentDefs).find(
+      (key) => currentDefs[key].title === sourceSection,
+    );
+
+    // Find target section key
+    const targetSectionKey = Object.keys(currentDefs).find(
+      (key) => currentDefs[key].title === targetSection,
+    );
+
+    if (!sourceSectionKey || !targetSectionKey) return;
+
+    const sourceDef = currentDefs[sourceSectionKey];
+    const targetDef = currentDefs[targetSectionKey];
+
+    // Get the property to move
+    const propertyToMove = sourceDef.properties?.[propertyName];
+    if (!propertyToMove) return;
+
+    const isRequired = (sourceDef.required || []).includes(propertyName);
+
+    // Remove from source
+    const { [propertyName]: removed, ...remainingSourceProps } =
+      sourceDef.properties || {};
+    const updatedSourceRequired = (sourceDef.required || []).filter(
+      (r: string) => r !== propertyName,
+    );
+
+    // Insert into target at the correct position
+    const targetProps = targetDef.properties || {};
+    const targetPropKeys = Object.keys(targetProps);
+    const insertIndex = targetPropKeys.indexOf(targetProperty);
+
+    const newTargetPropKeys = [...targetPropKeys];
+    if (insertIndex !== -1) {
+      newTargetPropKeys.splice(insertIndex, 0, propertyName);
+    } else {
+      newTargetPropKeys.push(propertyName);
+    }
+
+    const updatedTargetProps: Record<string, any> = {};
+    for (const key of newTargetPropKeys) {
+      if (key === propertyName) {
+        updatedTargetProps[key] = propertyToMove;
+      } else {
+        updatedTargetProps[key] = targetProps[key];
+      }
+    }
+
+    const updatedTargetRequired = isRequired
+      ? [...(targetDef.required || []), propertyName]
+      : targetDef.required || [];
+
+    // Update schema
+    this.schema = {
+      ...this.schema,
+      $defs: {
+        ...currentDefs,
+        [sourceSectionKey]: {
+          ...sourceDef,
+          properties: remainingSourceProps,
+          required: updatedSourceRequired,
+        },
+        [targetSectionKey]: {
+          ...targetDef,
+          properties: updatedTargetProps,
+          required: updatedTargetRequired,
+        },
+      },
+    };
+
+    this.requestUpdate();
+    await this.handleSave();
   }
 
   static styles = css`
@@ -401,7 +689,9 @@ export class JsonSchemaViewer extends LitElement {
 
           <div class="server-status ${this.serverStatus}">
             <fa-icon
-              icon=${this.serverStatus === "connected" ? "fas check-circle" : "fas exclamation-circle"}
+              icon=${this.serverStatus === "connected"
+                ? "fas check-circle"
+                : "fas exclamation-circle"}
             ></fa-icon>
             ${this.serverStatus === "connected" ? "Connected" : "Disconnected"}
           </div>
@@ -414,14 +704,18 @@ export class JsonSchemaViewer extends LitElement {
             ${this.lastSaveStatus
               ? html`
                   <div class="save-status ${this.lastSaveStatus}">
-                    ${this.lastSaveStatus === "success" ? "Saved successfully" : "Save failed"}
+                    ${this.lastSaveStatus === "success"
+                      ? "Saved successfully"
+                      : "Save failed"}
                   </div>
                 `
               : ""}
             ${this.lastSaveTime
               ? html`
                   <small class="save-time text-muted text-centered">
-                    ${formatDistanceToNow(this.lastSaveTime, { addSuffix: true })}
+                    ${formatDistanceToNow(this.lastSaveTime, {
+                      addSuffix: true,
+                    })}
                   </small>
                 `
               : ""}
@@ -441,7 +735,12 @@ export class JsonSchemaViewer extends LitElement {
                   .description=${def.description || ""}
                   .icon=${def.fa_icon || ""}
                   .section=${def}
-                  @section-update=${(e: CustomEvent) => this.handleSchemaUpdate(e.detail.name, e.detail.section)}
+                  @section-update=${(e: CustomEvent) =>
+                    this.handleSchemaUpdate(e.detail.name, e.detail.section)}
+                  @section-reorder=${this.handleSectionReorder}
+                  @property-move-to-section=${this.handlePropertyMoveToSection}
+                  @property-move-between-sections=${this
+                    .handlePropertyMoveBetweenSections}
                 ></schema-section>
               </div>
             `;

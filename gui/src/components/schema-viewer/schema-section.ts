@@ -1,13 +1,18 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import '../common/fa-icon';
-import '../common/markdown-viewer';
+import { LitElement, html, css } from "lit";
+import { customElement, property, state, query } from "lit/decorators.js";
+import "../common/fa-icon";
+import "../common/markdown-viewer";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 
 // Lazy load components
-const PropertyField = () => import('./property-field');
+const PropertyField = () => import("./property-field");
 
 export interface SchemaProperty {
-  type: 'string' | 'number' | 'integer' | 'boolean';
+  type: "string" | "number" | "integer" | "boolean";
   description?: string;
   default?: any;
   enum?: any[];
@@ -54,7 +59,13 @@ export class SchemaSectionElement extends LitElement {
   @property({ type: Object })
   validation: Record<string, ValidationState> = {};
 
+  @state() private isDragging = false;
+  @state() private isDragOver = false;
+  @query(".section") private sectionElement?: HTMLElement;
+  @query(".section-drag-handle") private dragHandleElement?: HTMLElement;
+
   private subComponentsLoaded = false;
+  private cleanupDragAndDrop?: () => void;
 
   async connectedCallback() {
     super.connectedCallback();
@@ -63,6 +74,86 @@ export class SchemaSectionElement extends LitElement {
       this.subComponentsLoaded = true;
       this.requestUpdate();
     }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.cleanupDragAndDrop?.();
+  }
+
+  private setupDragAndDrop() {
+    if (!this.sectionElement || !this.dragHandleElement) {
+      console.log("Section drag setup skipped", {
+        hasSection: !!this.sectionElement,
+        hasHandle: !!this.dragHandleElement,
+      });
+      return;
+    }
+
+    console.log("Setting up section drag and drop for:", this.name);
+
+    this.cleanupDragAndDrop = combine(
+      draggable({
+        element: this.sectionElement,
+        dragHandle: this.dragHandleElement,
+        getInitialData: () => {
+          console.log("Getting section drag data for:", this.name);
+          return { name: this.name, type: "schema-section" };
+        },
+        onDragStart: () => {
+          console.log("Section drag started:", this.name);
+          this.isDragging = true;
+        },
+        onDrop: () => {
+          console.log("Section drag ended:", this.name);
+          this.isDragging = false;
+        },
+      }),
+      dropTargetForElements({
+        element: this.sectionElement,
+        canDrop: ({ source }) => {
+          return (
+            (source.data.type === "schema-section" &&
+              source.data.name !== this.name) ||
+            source.data.type === "property-field"
+          );
+        },
+        onDragEnter: () => {
+          console.log("Drag enter section:", this.name);
+          this.isDragOver = true;
+        },
+        onDragLeave: () => {
+          console.log("Drag leave section:", this.name);
+          this.isDragOver = false;
+        },
+        onDrop: ({ source }) => {
+          this.isDragOver = false;
+          const draggedName = source.data.name as string;
+
+          if (
+            source.data.type === "schema-section" &&
+            draggedName !== this.name
+          ) {
+            this.dispatchEvent(
+              new CustomEvent("section-reorder", {
+                detail: { draggedName, targetName: this.name },
+                bubbles: true,
+                composed: true,
+              }),
+            );
+          } else if (source.data.type === "property-field") {
+            // Handle property dropped onto section (add to end)
+            this.dispatchEvent(
+              new CustomEvent("property-move-to-section", {
+                detail: { propertyName: draggedName, targetSection: this.name },
+                bubbles: true,
+                composed: true,
+              }),
+            );
+          }
+        },
+      }),
+    );
   }
 
   static styles = css`
@@ -74,10 +165,66 @@ export class SchemaSectionElement extends LitElement {
       background: var(--background-light);
       border-radius: 8px;
       padding: 1.5rem;
+      transition:
+        opacity 0.2s,
+        border-color 0.2s,
+        box-shadow 0.2s;
       &.border {
         border: 2px solid var(--border-color);
         box-shadow: none;
       }
+    }
+
+    .section.is-dragging {
+      opacity: 0.5;
+    }
+
+    .section.is-drag-over {
+      border-color: var(--primary-color) !important;
+      box-shadow: 0 0 0 3px rgba(26, 150, 85, 0.25) !important;
+      position: relative;
+    }
+
+    .section.is-drag-over::after {
+      content: "Drop property here";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--primary-color);
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .section-drag-handle {
+      cursor: grab;
+      color: var(--text-muted);
+      padding: 0.5rem;
+      margin: -0.5rem 0.5rem -0.5rem -0.5rem;
+      display: inline-flex;
+      align-items: center;
+      font-size: 1.2rem;
+      opacity: 0.4;
+      transition: opacity 0.2s;
+    }
+
+    .section-drag-handle:hover {
+      opacity: 0.8;
+    }
+
+    .section-drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .section-drag-handle * {
+      pointer-events: none;
+      user-select: none;
     }
 
     .parameters {
@@ -130,7 +277,10 @@ export class SchemaSectionElement extends LitElement {
   `;
 
   private dispatchUpdate(section: SchemaSection) {
-    console.log(`Dispatching section update for ${this.name}:`, JSON.stringify(section));
+    console.log(
+      `Dispatching section update for ${this.name}:`,
+      JSON.stringify(section),
+    );
 
     // Ensure we're sending a clean copy without any circular references or reactive properties
     const cleanSection = JSON.parse(JSON.stringify(section));
@@ -201,7 +351,10 @@ export class SchemaSectionElement extends LitElement {
     };
 
     // Dispatch the update
-    console.log("Dispatching section update with renamed property:", updatedSection);
+    console.log(
+      "Dispatching section update with renamed property:",
+      updatedSection,
+    );
     this.dispatchUpdate(updatedSection);
   }
 
@@ -212,10 +365,10 @@ export class SchemaSectionElement extends LitElement {
     this.dispatchUpdate({
       ...this.section,
       title: name,
-      description: property.description || "",  // Ensure we always send a value
+      description: property.description || "", // Ensure we always send a value
       fa_icon: property.fa_icon,
-      properties: this.section.properties || {},  // Preserve existing properties
-      required: this.section.required || []  // Preserve existing required fields
+      properties: this.section.properties || {}, // Preserve existing properties
+      required: this.section.required || [], // Preserve existing required fields
     });
 
     // Update local state to reflect changes immediately
@@ -229,6 +382,44 @@ export class SchemaSectionElement extends LitElement {
       console.log(`Section ${this.name} updated:`, this.section);
       this.requestUpdate();
     }
+
+    // Set up drag and drop after first render
+    if (
+      this.sectionElement &&
+      this.dragHandleElement &&
+      !this.cleanupDragAndDrop
+    ) {
+      this.setupDragAndDrop();
+    }
+  }
+
+  private handlePropertyReorder(e: CustomEvent) {
+    e.stopPropagation();
+    const { draggedName, targetName } = e.detail;
+    console.log(`Reordering: ${draggedName} -> ${targetName}`);
+
+    const properties = this.section.properties || {};
+    const propertyKeys = Object.keys(properties);
+    const draggedIndex = propertyKeys.indexOf(draggedName);
+    const targetIndex = propertyKeys.indexOf(targetName);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Create new ordered properties object
+    const newPropertyKeys = [...propertyKeys];
+    newPropertyKeys.splice(draggedIndex, 1);
+    newPropertyKeys.splice(targetIndex, 0, draggedName);
+
+    const reorderedProperties: Record<string, SchemaProperty> = {};
+    for (const key of newPropertyKeys) {
+      reorderedProperties[key] = properties[key];
+    }
+
+    // Dispatch the update with reordered properties
+    this.dispatchUpdate({
+      ...this.section,
+      properties: reorderedProperties,
+    });
   }
 
   render() {
@@ -240,7 +431,16 @@ export class SchemaSectionElement extends LitElement {
     };
 
     return html`
-      <div class="section border">
+      <div
+        class="section border ${this.isDragging ? "is-dragging" : ""} ${this
+          .isDragOver
+          ? "is-drag-over"
+          : ""}"
+      >
+        <fa-icon
+          class="section-drag-handle"
+          icon="fas fa-grip-vertical"
+        ></fa-icon>
         <property-field
           .name=${this.name}
           .schemaEntry=${sectionHeaderProperty}
@@ -261,6 +461,7 @@ export class SchemaSectionElement extends LitElement {
               ([name, property]) => html`
                 <property-field
                   .name=${name}
+                  .sectionName=${this.name}
                   .schemaEntry=${property}
                   .required=${(this.section.required || []).includes(name)}
                   .validation=${this.validation[`${this.name}.${name}`] || {}}
@@ -282,8 +483,20 @@ export class SchemaSectionElement extends LitElement {
                       });
                     }
                   }}
+                  @property-reorder=${this.handlePropertyReorder}
+                  @property-move-between-sections=${(e: CustomEvent) => {
+                    // Bubble up to parent to handle cross-section moves
+                    e.stopPropagation();
+                    this.dispatchEvent(
+                      new CustomEvent("property-move-between-sections", {
+                        detail: e.detail,
+                        bubbles: true,
+                        composed: true,
+                      }),
+                    );
+                  }}
                 ></property-field>
-              `
+              `,
             )}
           </div>
         </div>

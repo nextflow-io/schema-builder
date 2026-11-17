@@ -1,26 +1,30 @@
 {
   "name": "nf-schema-builder-gui",
-  "version": "0.0.1",
+  "version": "0.2.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
-    "@fortawesome/fontawesome-svg-core": "^6.7.2",
-    "@fortawesome/free-brands-svg-icons": "^6.7.2",
-    "@fortawesome/free-solid-svg-icons": "^6.7.2",
-    "date-fns": "^4.1.0",
-    "lit": "^3.3.0",
-    "marked": "^15.0.10",
-    "sanitize-html": "^2.16.0"
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/maven-pro": "^5.3.0",
+    "@fortawesome/free-brands-svg-icons": "^7.3.1",
+    "@fortawesome/free-regular-svg-icons": "^7.3.1",
+    "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "dompurify": "^3.4.18",
+    "lit": "^3.3.3",
+    "marked": "^18.2.0",
+    "shiki": "^4.6.0"
   },
   "devDependencies": {
-    "@types/sanitize-html": "^2.15.0",
-    "sass": "^1.87.0",
-    "typescript": "^5.8.3",
-    "vite": "^6.3.3"
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
   }
 }

@@ -1,29 +1,27 @@
 [project]
 name = "nf-schema-builder"
-version = "0.1.0"
-description = "A CLI tool to build JSON schemas for Nextflow."
+version = "0.2.0"
+description = "Build and edit JSON schemas for Nextflow pipelines in a local web editor."
+readme = "README.md"
 authors = []
+requires-python = ">=3.10"
 dependencies = [
-    "typer>=0.15.1",
-    "rich>=13.9.4",
-    "pyyaml>=6.0.1",
     "jsonschema>=4.20.0",
-    "aiohttp>=3.9.3",
+    "rich>=13.3.1",
+    "typer>=0.15.1",
 ]
-requires-python = ">=3.9"
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.9.2",
     "pyright>=1.1.350",
     "types-jsonschema>=4.20.0",
-    "types-PyYAML>=6.0.1",
     "pre-commit>=3.5.0",
     "pytest>=8.1.1",
     "pytest-cov>=4.1.0",
-    "pytest-sugar>=1.0.0",
-    "ipdb>=0.13.13",
+    "hatchling",
 ]
+
 [project.scripts]
 nf-schema-builder = "nf_schema_builder.cli:app"
 nfsb = "nf_schema_builder.cli:app"
@@ -32,8 +30,22 @@ nfsb = "nf_schema_builder.cli:app"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# The web editor is built by Vite into nf_schema_builder/static, which is not
+# tracked by git but must be shipped in the wheel and the sdist.
+[tool.hatch.build]
+artifacts = ["nf_schema_builder/static/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["nf_schema_builder"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/nf_schema_builder", "/tests", "/hatch_build.py", "/README.md"]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 120
 
 
@@ -59,33 +71,20 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pyright]
-include = ["."]
-exclude = ["**/node_modules", "**/__pycache__", "**/gui/src"]
+include = ["nf_schema_builder", "tests", "hatch_build.py"]
 typeCheckingMode = "basic"
-useLibraryCodeForTypes = true
-reportMissingImports = true
 reportMissingTypeStubs = false
-pythonVersion = "3.9"
+pythonVersion = "3.10"
 strictListInference = true
 strictDictionaryInference = true
 strictParameterNullCheck = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
 addopts = "-v --cov=nf_schema_builder --cov-report=term-missing"
-
-[tool.coverage.run]
-source = ["nf_schema_builder"]
-omit = ["tests/*"]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
-    "def __repr__",
     "if __name__ == .__main__.:",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING:",
-    "pass",
 ]

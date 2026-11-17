@@ -1,0 +1,75 @@
+/*
+ * Design tokens. They use Bootstrap 5.3's variable names, so a page that
+ * already loads Bootstrap (or sets these variables) restyles the editor; all
+ * components read them through their shadow DOM.
+ */
+:root {
+  --bs-font-sans-serif: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+  --bs-font-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --bs-body-font-size: 0.9375rem;
+  --bs-body-bg: #fff;
+  --bs-body-color: #212529;
+  --bs-secondary-color: #6c757d;
+  --bs-secondary-bg: #e9ecef;
+  --bs-tertiary-bg: #f8f9fa;
+  --bs-border-color: #dee2e6;
+  --bs-border-radius: 0.375rem;
+  --bs-border-radius-lg: 0.5rem;
+  --bs-box-shadow-sm: 0 1px 2px rgb(0 0 0 / 6%);
+  --bs-box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 18%);
+  /* nf-core green */
+  --bs-primary: #22ae63;
+  --bs-primary-rgb: 34, 174, 99;
+  --bs-primary-text-emphasis: #17783f;
+  --bs-primary-bg-subtle: #e4f6ec;
+  --bs-danger: #c9302c;
+  --bs-danger-bg-subtle: #fbe9e8;
+  --bs-warning: #ffc107;
+  --bs-warning-text-emphasis: #8a5a00;
+  --bs-warning-bg-subtle: #fff4d6;
+  --bs-info-text-emphasis: #0b5a85;
+  --bs-info-bg-subtle: #e2f1fa;
+  /* Surface of cards and inputs */
+  --nfsb-surface: #fff;
+  /* Headings and the navbar, as on nf-co.re */
+  --nfsb-font-heading: "Maven Pro Variable", "Maven Pro", var(--bs-font-sans-serif);
+  --nfsb-navbar-bg: #212529;
+  --nfsb-navbar-color: #f8f9fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bs-body-bg: #212529;
+    --bs-body-color: #dee2e6;
+    --bs-secondary-color: #adb5bd;
+    --bs-secondary-bg: #343a40;
+    --bs-tertiary-bg: #2b3035;
+    --bs-border-color: #495057;
+    --bs-box-shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+    --bs-box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 60%);
+    --bs-primary-text-emphasis: #7ad3a3;
+    --bs-primary-bg-subtle: #0f3520;
+    --bs-danger: #f0736e;
+    --bs-danger-bg-subtle: #3a1917;
+    --bs-warning-text-emphasis: #f5c95a;
+    --bs-warning-bg-subtle: #3a2e0c;
+    --bs-info-text-emphasis: #7cc7ee;
+    --bs-info-bg-subtle: #0f2b3a;
+    --nfsb-surface: #2b3035;
+    --nfsb-navbar-bg: #1a1d20;
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--bs-font-sans-serif);
+  font-size: var(--bs-body-font-size);
+  line-height: 1.5;
+  color: var(--bs-body-color);
+  background: var(--bs-body-bg);
+}

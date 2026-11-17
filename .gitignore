@@ -19,3 +19,5 @@ dmypy.json
 .DS_Store
 node_modules/
 dist/
+# Built web editor (see gui/)
+nf_schema_builder/static/

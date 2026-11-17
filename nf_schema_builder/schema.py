@@ -1,108 +1,166 @@
-"""Schema validation functions for nf-schema-builder."""
+"""
+Load, inspect and validate Nextflow JSON schemas.
+
+Two kinds of schema are understood:
+
+* **parameters** - a pipeline ``nextflow_schema.json``: an object whose parameters
+  live in groups under ``$defs`` (nf-schema) or ``definitions`` (nf-validation),
+  and/or directly under the top-level ``properties``.
+* **samplesheet** - e.g. ``assets/schema_input.json``: an array whose ``items``
+  describe the columns of a samplesheet.
+"""
+
+from __future__ import annotations
 
 import json
+import os
+import re
+from collections.abc import Iterator, Mapping
+from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any
 
-import typer
-import yaml
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
+from jsonschema.protocols import Validator
+from jsonschema.validators import validator_for
 
-from nf_schema_builder.utils import handle_schema_errors
+from nf_schema_builder.exceptions import InvalidSchemaError
+
+Schema = dict[str, Any]
+
+DEFS_KEYS = ("$defs", "definitions")
+DEFAULT_INDENT = 4
 
 
-@handle_schema_errors
-def load_schema(file_path: Path) -> dict:
-    """Load schema from JSON or YAML file."""
+class SchemaKind(str, Enum):
+    """The kind of Nextflow schema a document describes."""
+
+    PARAMETERS = "parameters"
+    SAMPLESHEET = "samplesheet"
+
+
+def load_schema(path: str | os.PathLike[str]) -> Schema:
+    """Read a JSON schema file and return it as a dict."""
+    path = Path(path)
     try:
-        if file_path.suffix.lower() in (".yml", ".yaml"):
-            with file_path.open() as f:
-                result = yaml.safe_load(f)
-        else:
-            with file_path.open() as f:
-                result = json.load(f)
-
-        if not isinstance(result, dict):
-            raise typer.BadParameter("Schema must be a dictionary")
-        return result
-    except (json.JSONDecodeError, yaml.YAMLError) as e:
-        raise typer.BadParameter(f"Invalid file format: {e}") from e
+        schema = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as e:
+        raise InvalidSchemaError(f"Schema file not found: {path}") from e
+    except json.JSONDecodeError as e:
+        raise InvalidSchemaError(f"{path} is not valid JSON: {e}") from e
+    if not isinstance(schema, dict):
+        raise InvalidSchemaError(f"{path} must contain a JSON object at the top level")
+    return schema
 
 
-class SchemaValidator:
-    """Handles schema validation operations."""
+def detect_indent(text: str) -> int | str:
+    """Return the indentation used by a JSON document, so edits can keep it."""
+    match = re.search(r'^([ \t]+)"', text, flags=re.MULTILINE)
+    if not match:
+        return DEFAULT_INDENT
+    indent = match.group(1)
+    return indent if "\t" in indent else len(indent)
 
-    def __init__(self, schema: dict, defs_key: str = "$defs"):
-        """
-        Initialize SchemaValidator with schema and definitions key.
 
-        Args:
-            schema: The JSON schema dictionary
-            defs_key: The key used for definitions in the schema (defaults to "$defs")
+def dump_schema(schema: Schema, path: str | os.PathLike[str], indent: int | str | None = None) -> None:
+    """
+    Write a schema to disk.
 
-        """
-        self.schema = schema
-        self.defs_key = defs_key
+    If ``indent`` is not given, the indentation of the existing file is kept
+    (four spaces for new files, the nf-core convention).
+    """
+    path = Path(path)
+    if indent is None:
+        indent = detect_indent(path.read_text(encoding="utf-8")) if path.exists() else DEFAULT_INDENT
+    path.write_text(json.dumps(schema, indent=indent, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    def validate_parameter(self, param_name: str, param_value: Any) -> tuple[bool, str]:
-        """Validate a parameter against its schema definition."""
-        schema_param = self.find_parameter(param_name)
-        if not schema_param:
-            return False, "Parameter not found in schema"
 
-        if schema_param.get("hidden", False) or param_value == "null":
-            return True, ""
+def schema_kind(schema: Schema) -> SchemaKind:
+    """Tell a samplesheet schema from a pipeline parameter schema."""
+    if schema.get("type") == "array" or isinstance(schema.get("items"), dict):
+        return SchemaKind.SAMPLESHEET
+    return SchemaKind.PARAMETERS
 
-        # Create a mini-schema for this parameter
-        param_schema = {"type": "object", "properties": {param_name: schema_param}}
 
-        try:
-            # Validate using jsonschema
-            validate({param_name: param_value}, param_schema)
-            return True, ""
-        except ValidationError as e:
-            return False, str(e.message)
+def validator_class(schema: Schema) -> type[Validator]:
+    """Return the validator for the draft named in ``$schema`` (2020-12 if there is none)."""
+    return validator_for(schema, default=Draft202012Validator)
 
-    def find_parameter(self, param_name: str) -> Optional[dict[str, Any]]:
-        """Find parameter definition in schema."""
-        # Check top-level properties
-        properties = self.schema.get("properties", {})
-        if param_name in properties and isinstance(properties[param_name], dict):
-            return cast(dict[str, Any], properties[param_name].copy())
 
-        # Check definitions referenced in allOf
-        for section in self.schema.get("allOf", []):
-            if "$ref" in section:
-                def_name = section["$ref"].split("/")[-1]
-                defs = self.schema.get(self.defs_key, {})
-                if def_name in defs and isinstance(defs[def_name], dict):
-                    definition = defs[def_name]
-                    def_properties = definition.get("properties", {})
-                    if param_name in def_properties and isinstance(def_properties[param_name], dict):
-                        return cast(dict[str, Any], def_properties[param_name].copy())
+def check_schema(schema: object) -> None:
+    """
+    Check that ``schema`` is a valid JSON Schema for the draft named in ``$schema``.
 
-        return None
+    Raises:
+        InvalidSchemaError: if it is not.
 
-    def add_parameter(self, param_name: str, param_value: str) -> None:
-        """Add a new parameter to the schema."""
-        # Infer parameter type
-        param_type = "string"  # default type
-        try:
-            if str(param_value).lower() in ["true", "false"]:
-                param_type = "boolean"
-            elif str(param_value).replace(".", "").isdigit():
-                param_type = "number" if "." in str(param_value) else "integer"
-        except (ValueError, AttributeError):
-            pass
+    """
+    if not isinstance(schema, dict):
+        raise InvalidSchemaError("A schema must be a JSON object")
+    try:
+        validator_class(schema).check_schema(schema)
+    except SchemaError as e:
+        location = "/".join(str(part) for part in e.absolute_path) or "<root>"
+        raise InvalidSchemaError(f"Invalid JSON schema at {location}: {e.message}") from e
 
-        # Create parameter definition
-        param_def = {
-            "type": param_type,
-            "description": f"Parameter {param_name}",
-        }
 
-        # Add to top-level properties
-        if "properties" not in self.schema:
-            self.schema["properties"] = {}
-        self.schema["properties"][param_name] = param_def
+def _params(container: object) -> Iterator[tuple[str, Schema]]:
+    properties = container.get("properties") if isinstance(container, dict) else None
+    if isinstance(properties, dict):
+        yield from ((name, definition) for name, definition in properties.items() if isinstance(definition, dict))
+
+
+def iter_params(schema: Schema) -> Iterator[tuple[str, Schema, str | None]]:
+    """
+    Yield ``(name, definition, group)`` for every parameter (or samplesheet column).
+
+    ``group`` is the key of the definition group holding the parameter, or
+    ``None`` for parameters that are not in a group.
+    """
+    if schema_kind(schema) is SchemaKind.SAMPLESHEET:
+        yield from ((name, definition, None) for name, definition in _params(schema.get("items")))
+        return
+
+    yield from ((name, definition, None) for name, definition in _params(schema))
+    for defs_key in DEFS_KEYS:
+        groups = schema.get(defs_key)
+        for group_key, group in groups.items() if isinstance(groups, dict) else ():
+            yield from ((name, definition, group_key) for name, definition in _params(group))
+
+
+def infer_param_schema(value: object) -> Schema:
+    """Build a minimal parameter definition from a default value."""
+    if isinstance(value, bool):
+        param_type = "boolean"
+    elif isinstance(value, int):
+        param_type = "integer"
+    elif isinstance(value, float):
+        param_type = "number"
+    else:
+        param_type = "string"
+        value = None if value is None else str(value)
+
+    definition: Schema = {"type": param_type}
+    # Same convention as nf-core: no default for false-y values, except 0
+    if value or (value == 0 and value is not False):
+        definition["default"] = value
+    return definition
+
+
+def add_params(schema: Schema, params: Mapping[str, object]) -> list[str]:
+    """
+    Add parameters that are not yet in the schema, inferring types from their values.
+
+    New parameters are added ungrouped, to the top-level ``properties``, so they
+    can be sorted into groups in the editor. Returns the names that were added.
+    """
+    if schema_kind(schema) is not SchemaKind.PARAMETERS:
+        raise InvalidSchemaError("Parameters can only be added to a pipeline parameter schema")
+    existing = {name for name, _, _ in iter_params(schema)}
+    added = [name for name in params if name not in existing]
+    if added:
+        properties = schema.setdefault("properties", {})
+        for name in added:
+            properties[name] = infer_param_schema(params[name])
+    return added

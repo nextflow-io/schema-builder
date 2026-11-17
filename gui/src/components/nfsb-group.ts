@@ -127,6 +127,8 @@ export class NfsbGroup extends LitElement {
   /** Where a dragged group ("before"/"after") or parameter ("into") would be dropped. */
   @property({ reflect: true }) drop: "before" | "after" | "into" | null = null;
   @state() private picking = false;
+  /** The parameter just added with the "Add" button, which animates in. */
+  @state() private added: string | null = null;
 
   constructor() {
     super();
@@ -176,6 +178,7 @@ export class NfsbGroup extends LitElement {
   private add(): void {
     const { schema, name } = addParam(store.schema, this.group.id);
     store.filter = "";
+    this.added = name;
     store.commit(schema);
     void this.reveal(name);
   }
@@ -301,7 +304,15 @@ export class NfsbGroup extends LitElement {
               ${repeat(
                 params,
                 (param) => param.name,
-                (param) => html`<nfsb-param .groupId=${group.id} .param=${param}></nfsb-param>`,
+                (param) =>
+                  html`<nfsb-param
+                    .groupId=${group.id}
+                    .param=${param}
+                    ?fresh=${param.name === this.added}
+                    @animationend=${(event: AnimationEvent) => {
+                      if (event.animationName === "nfsb-grow") this.added = null;
+                    }}
+                  ></nfsb-param>`,
               )}
               ${params.length === 0
                 ? html`<div class="empty">

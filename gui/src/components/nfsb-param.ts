@@ -47,6 +47,65 @@ export class NfsbParam extends LitElement {
         display: block;
         position: relative;
       }
+      /* A just-added parameter grows out of the "Add" button below it (bottom left) */
+      :host([fresh]) {
+        transform-origin: 0 calc(100% + 1rem);
+        animation: nfsb-grow 0.36s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+      }
+      @keyframes nfsb-grow {
+        from {
+          opacity: 0;
+          transform: scale(0.85);
+          clip-path: inset(calc(100% - 2rem) calc(100% - 8rem) 0 0 round var(--bs-border-radius));
+        }
+        60% {
+          opacity: 1;
+        }
+        to {
+          transform: none;
+          clip-path: inset(-0.5rem round var(--bs-border-radius));
+        }
+      }
+      /*
+       * A deleted parameter switches off like a CRT: top and bottom close in on a bright line, the
+       * line shrinks to a dot and fades, and the rows below slide up into the gap.
+       */
+      :host([removing]) {
+        pointer-events: none;
+        transform-origin: center;
+        animation: nfsb-crt-off 0.35s forwards;
+      }
+      @keyframes nfsb-crt-off {
+        0% {
+          transform: none;
+          filter: none;
+          margin-bottom: 0;
+          animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.4);
+        }
+        /* Collapsed to a ~2px line (--nfsb-line is 2px / the row's height, set when deletion starts) */
+        45% {
+          transform: scale(1, var(--nfsb-line, 0.02));
+          opacity: 1;
+          margin-bottom: 0;
+          animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.3);
+        }
+        /* The line shrinks to a dot */
+        80% {
+          transform: scale(0.01, var(--nfsb-line, 0.02));
+          opacity: 1;
+        }
+        100% {
+          transform: scale(0, var(--nfsb-line, 0.02));
+          opacity: 0;
+          /* --nfsb-height is set when the deletion starts; 0.5rem is the gap to the next row */
+          margin-bottom: calc(-1 * var(--nfsb-height, 0px) - 0.5rem);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :host([fresh]) {
+          animation: none;
+        }
+      }
       .param {
         border: 1px solid var(--bs-border-color);
         border-radius: var(--bs-border-radius);
@@ -173,6 +232,10 @@ export class NfsbParam extends LitElement {
   @property({ attribute: false }) param!: Param;
   /** Where a dragged parameter would be dropped, shown as a line. */
   @property({ reflect: true }) drop: "before" | "after" | null = null;
+  /** Just added: plays the grow-in animation. */
+  @property({ type: Boolean, reflect: true }) fresh = false;
+  /** Being deleted: plays the collapse animation, then removes the parameter. */
+  @property({ type: Boolean, reflect: true }) removing = false;
 
   @state() private jsonMode = false;
   @state() private jsonError: string | null = null;
@@ -194,6 +257,9 @@ export class NfsbParam extends LitElement {
         const position = dropEdge(event, this) === "before" ? { before: this.param.name } : { after: this.param.name };
         store.commit(moveParam(store.schema, item.groupId, item.name, this.groupId, position));
       },
+    });
+    this.addEventListener("animationend", (event) => {
+      if (event.animationName === "nfsb-crt-off") this.remove_();
     });
   }
 
@@ -223,6 +289,23 @@ export class NfsbParam extends LitElement {
     } catch (error) {
       this.jsonError = errorMessage(error);
     }
+  }
+
+  /** Collapse the parameter, then delete it (straight away if the user prefers reduced motion). */
+  private delete_(): void {
+    if (this.removing) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      this.remove_();
+      return;
+    }
+    this.style.setProperty("--nfsb-height", `${this.offsetHeight}px`);
+    this.style.setProperty("--nfsb-line", `${2 / Math.max(this.offsetHeight, 2)}`);
+    this.removing = true;
+  }
+
+  private remove_(): void {
+    this.removing = false;
+    store.commit(removeParam(store.schema, this.groupId, this.param.name));
   }
 
   private move(toGroup: string, position: Position): void {
@@ -607,7 +690,7 @@ export class NfsbParam extends LitElement {
       </button>
       <button
         class="btn btn-sm btn-outline-danger"
-        @click=${() => store.commit(removeParam(store.schema, this.groupId, name))}
+        @click=${this.delete_}
       >
         <nfsb-icon name="trash"></nfsb-icon> Delete ${store.noun}
       </button>

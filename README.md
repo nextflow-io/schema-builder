@@ -53,7 +53,7 @@ def launch_web_builder(self):
 ```
 
 For more control, `SchemaServer` runs the editor without blocking, and `check_schema`, `iter_params`, `add_params`,
-`compare_with_workflow` are available on their own. The library needs Python 3.10+ and depends only on
+`compare_with_workflow` are available on their own. The library needs Python 3.11+ and depends only on
 `jsonschema`, `rich` and `typer`.
 
 To use it from another project before a release is published, build the editor once (see below) and install the

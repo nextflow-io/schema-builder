@@ -8,7 +8,7 @@ import { parametersTemplate, samplesheetTemplate } from "../model/templates";
 import { LiveFields } from "../live";
 import { StoreController, store } from "../store";
 import { markAdded } from "../styles/motion";
-import { shared } from "../styles/shared";
+import { shared, visuallyHidden } from "../styles/shared";
 import "./nfsb-group";
 import "./nfsb-icon";
 import "./nfsb-json-preview";
@@ -37,36 +37,32 @@ export class NfsbApp extends LitElement {
         color: var(--nfsb-navbar-color);
         background: var(--nfsb-navbar-bg);
         border-bottom: 3px solid var(--bs-primary);
-      }
-      .navbar .btn.text-body-secondary,
-      .navbar .btn-outline-secondary {
-        color: var(--nfsb-navbar-color);
-        background: transparent;
-        border-color: rgb(248 249 250 / 25%);
+        /* a dark colour scope: the shared classes inside pick up the navbar's colours */
+        --bs-body-color: var(--nfsb-navbar-color);
+        --bs-secondary-color: color-mix(in srgb, var(--nfsb-navbar-color) 72%, transparent);
+        --bs-border-color: color-mix(in srgb, var(--nfsb-navbar-color) 25%, transparent);
+        --bs-secondary-bg: color-mix(in srgb, var(--nfsb-navbar-color) 15%, transparent);
+        --bs-danger: #ff8f8a;
+        --nfsb-surface: transparent;
       }
       .navbar .btn.text-body-secondary {
-        border-color: transparent;
-      }
-      .navbar .btn.text-body-secondary:hover:not(:disabled),
-      .navbar .btn-outline-secondary:hover:not(:disabled),
-      .navbar .btn-outline-secondary.active {
-        background: rgb(248 249 250 / 15%);
+        color: var(--bs-body-color);
       }
       .divider {
         width: 1px;
         align-self: stretch;
-        background: rgb(248 249 250 / 25%);
+        background: var(--bs-border-color);
       }
       .navbar .status {
         max-width: 22rem;
-        font-size: 0.8125rem;
-        color: rgb(248 249 250 / 70%);
+        font-size: var(--nfsb-font-size-sm);
+        color: var(--bs-secondary-color);
       }
       .navbar .status.text-danger {
-        color: #ff8f8a;
+        color: var(--bs-danger);
       }
       .navbar code {
-        color: rgb(248 249 250 / 75%);
+        color: var(--bs-secondary-color);
       }
       .brand {
         display: flex;
@@ -141,17 +137,12 @@ export class NfsbApp extends LitElement {
         .brand .badge {
           display: none;
         }
-        /* icon-only navbar buttons; the label stays as the accessible name (same as .visually-hidden) */
+        /* icon-only navbar buttons; the label stays as the accessible name */
         .navbar .btn {
           padding-inline: 0.5rem;
         }
         .navbar .btn .label {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          overflow: hidden;
-          clip-path: inset(50%);
-          white-space: nowrap;
+          ${visuallyHidden}
         }
         /* no room for side by side: the JSON toggle swaps the editor for the preview */
         .layout.with-json .json {
@@ -166,11 +157,6 @@ export class NfsbApp extends LitElement {
       h2 {
         margin: 0 0 0.4rem;
         padding: 0 0.5rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--bs-secondary-color);
       }
       .nav {
         display: flex;
@@ -194,7 +180,7 @@ export class NfsbApp extends LitElement {
       .nav .issue {
         align-items: flex-start;
         white-space: normal;
-        font-size: 0.8125rem;
+        font-size: var(--nfsb-font-size-sm);
       }
       .nav .issue nfsb-icon {
         margin-top: 0.2rem;
@@ -436,7 +422,7 @@ export class NfsbApp extends LitElement {
         <nfsb-icon name="rotate-left"></nfsb-icon>
       </button>
       <button
-        class="btn text-body-primary btn-icon"
+        class="btn text-body-secondary btn-icon"
         title="Redo (${isMac ? "⇧⌘Z" : "Ctrl+Shift+Z"})"
         aria-label="Redo"
         ?disabled=${!store.canRedo}
@@ -509,7 +495,7 @@ export class NfsbApp extends LitElement {
       />
       ${isParams
         ? html`<nav aria-label="Groups">
-            <h2>Groups</h2>
+            <h2 class="section-title">Groups</h2>
             <ul class="nav">
               ${store.groups.map(
                 (group) =>
@@ -533,7 +519,7 @@ export class NfsbApp extends LitElement {
         : nothing}
       ${store.issues.length
         ? html`<section aria-label="Problems">
-            <h2>Problems (${store.issues.length})</h2>
+            <h2 class="section-title">Problems (${store.issues.length})</h2>
             <ul class="nav">
               ${store.issues.map((issue) => this.renderIssue(issue))}
             </ul>

@@ -60,7 +60,7 @@ export class NfsbJsonPreview extends LitElement {
         gap: 0.5rem;
       }
       .copy [role="status"] {
-        font-size: 0.8125rem;
+        font-size: var(--nfsb-font-size-sm);
         font-weight: normal;
         color: var(--bs-secondary-color);
       }

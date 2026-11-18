@@ -39,7 +39,7 @@ export class NfsbGroup extends LitElement {
       }
       :host([drop="into"]) .card {
         border-color: var(--bs-primary);
-        box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+        box-shadow: 0 0 0 var(--bs-focus-ring-width) var(--bs-focus-ring-color);
       }
       .card.loose {
         border-style: dashed;
@@ -55,23 +55,22 @@ export class NfsbGroup extends LitElement {
         margin-bottom: 0.75rem;
         background: var(--bs-tertiary-bg);
         border-bottom: 1px solid var(--bs-border-color);
-              }
-      .card.loose header {
-        background: transparent;
-        border-bottom: 0;
-        margin-bottom: 0;
       }
+      .card.loose header,
       .collapsed header {
         margin-bottom: 0;
         border-bottom: 0;
-              }
+      }
+      .card.loose header {
+        background: transparent;
+      }
       .grip {
         padding: 0.55rem 0.25rem;
       }
       .icon {
         margin-top: 0.1rem;
         font-size: 1.1rem;
-        color: var(--bs-primary-text);
+        color: var(--bs-primary-text-emphasis);
       }
       .titles {
         flex: 1;
@@ -120,7 +119,7 @@ export class NfsbGroup extends LitElement {
         text-align: center;
         color: var(--bs-secondary-color);
         border: 1px dashed var(--bs-border-color);
-              }
+      }
       .add {
         align-self: flex-start;
       }

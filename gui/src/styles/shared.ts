@@ -1,5 +1,15 @@
 import { css } from "lit";
 
+/** `.visually-hidden`, also for rules that hide something only at some screen sizes. */
+export const visuallyHidden = css`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+`;
+
 /**
  * Styles shared by all components: a small subset of Bootstrap 5.3's classes,
  * driven by Bootstrap's CSS variables (see theme.css).
@@ -46,10 +56,15 @@ export const shared = css`
   .form-check-input:focus-visible {
     outline: 0;
     border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.3);
+    box-shadow: 0 0 0 var(--bs-focus-ring-width) var(--bs-focus-ring-color);
   }
   .btn-sm {
     padding: 0.2rem 0.5rem;
+    font-size: 0.875em;
+  }
+  .form-select-sm {
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
     font-size: 0.875em;
   }
   .btn-primary {
@@ -95,7 +110,7 @@ export const shared = css`
   .form-label {
     display: block;
     margin-bottom: 0.25rem;
-    font-size: 0.8125rem;
+    font-size: var(--nfsb-font-size-sm);
     font-weight: 600;
     color: var(--bs-secondary-color);
   }
@@ -103,7 +118,7 @@ export const shared = css`
   .form-select {
     display: block;
     width: 100%;
-    padding: 0.375rem 0.625rem;
+    padding: var(--nfsb-input-padding-y) var(--nfsb-input-padding-x);
     font: inherit;
     line-height: 1.5;
     color: var(--bs-body-color);
@@ -127,23 +142,19 @@ export const shared = css`
     background-position: right 0.75rem center;
     background-size: 16px 12px;
   }
-  .form-select[multiple],
-  .form-select[size]:not([size="1"]) {
-    padding-right: 0.625rem;
-    background-image: none;
-  }
   .form-control.is-invalid,
   .form-select.is-invalid {
     border-color: var(--bs-danger);
   }
-  .form-text {
+  .form-text,
+  .invalid-feedback {
     margin-top: 0.25rem;
-    font-size: 0.8125rem;
+    font-size: var(--nfsb-font-size-sm);
+  }
+  .form-text {
     color: var(--bs-secondary-color);
   }
   .invalid-feedback {
-    margin-top: 0.25rem;
-    font-size: 0.8125rem;
     color: var(--bs-danger);
   }
   .form-check {
@@ -205,6 +216,15 @@ export const shared = css`
     background: var(--bs-info-bg-subtle);
   }
 
+  /* Small uppercase heading of a sidebar list or form section */
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+  }
+
   /* Drag handle */
   .grip {
     color: var(--bs-secondary-color);
@@ -242,17 +262,15 @@ export const shared = css`
   .text-warning {
     color: var(--bs-warning-text-emphasis);
   }
+  .flex-grow-1 {
+    flex-grow: 1;
+  }
   .text-truncate {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+    ${visuallyHidden}
   }
 `;

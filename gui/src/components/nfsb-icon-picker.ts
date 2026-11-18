@@ -104,7 +104,7 @@ export class NfsbIconPicker extends LitElement {
             .value=${this.search}
             @input=${(event: Event) => (this.search = inputValue(event))}
           />
-          <button class="btn text-body-primary btn-icon" aria-label="Close" @click=${() => this.dialog.close()}>
+          <button class="btn text-body-secondary btn-icon" aria-label="Close" @click=${() => this.dialog.close()}>
             <nfsb-icon name="xmark"></nfsb-icon>
           </button>
         </header>

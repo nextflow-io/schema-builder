@@ -50,11 +50,10 @@ export class NfsbParam extends LitElement {
         display: block;
         position: relative;
       }
-      .param {
-        border: 1px solid var(--bs-border-color);
-        background: var(--nfsb-surface);
+      .card {
+        box-shadow: none;
       }
-      .param.open {
+      .card.open {
         border-color: var(--bs-primary);
         box-shadow: 0 0 0 0.15rem rgba(var(--bs-primary-rgb), 0.15);
       }
@@ -89,8 +88,6 @@ export class NfsbParam extends LitElement {
       .name {
         /* on narrow screens the name gives way (ellipsis) before the badges are pushed out of the row */
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
         padding: 0.25em 0.4rem;
         font-family: var(--bs-font-monospace);
         /* the ellipsis takes this colour, so keep it muted like the type it usually cuts off */
@@ -98,10 +95,6 @@ export class NfsbParam extends LitElement {
       }
       .name > span {
         color: var(--bs-primary);
-      }
-      .type {
-        font-family: var(--bs-font-monospace);
-        color: var(--bs-secondary-color);
       }
       .description {
         flex: 1;
@@ -149,23 +142,17 @@ export class NfsbParam extends LitElement {
       .section-title {
         margin: 0 0 0.75rem;
         padding-bottom: 0.35rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--bs-secondary-color);
         border-bottom: 1px solid var(--bs-border-color);
       }
-      .grid {
+      .grid,
+      .help {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(var(--min-column, 13rem), 1fr));
         gap: 0.9rem 1rem;
       }
       /* Help text and its rendered preview, side by side when there is room */
       .help {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-        gap: 0.9rem 1rem;
+        --min-column: 16rem;
       }
       .help textarea {
         height: calc(100% - 1.5rem);
@@ -184,12 +171,9 @@ export class NfsbParam extends LitElement {
       .issues {
         list-style: none;
       }
-      .issues .warning {
-        color: var(--bs-warning-text-emphasis);
-      }
       .preview {
         min-height: 6rem;
-        padding: 0.375rem 0.625rem;
+        padding: var(--nfsb-input-padding-y) var(--nfsb-input-padding-x);
         font-size: 0.875rem;
         background: var(--bs-tertiary-bg);
         border-radius: var(--bs-border-radius);
@@ -214,7 +198,7 @@ export class NfsbParam extends LitElement {
       textarea.json {
         min-height: 14rem;
         font-family: var(--bs-font-monospace);
-        font-size: 0.8125rem;
+        font-size: var(--nfsb-font-size-sm);
         white-space: pre;
       }
       .actions {
@@ -227,18 +211,12 @@ export class NfsbParam extends LitElement {
       }
       .actions .form-select {
         width: auto;
-        padding-top: 0.2rem;
-        padding-bottom: 0.2rem;
-        font-size: 0.875em;
       }
       /* The empty-value option and the example tester belong to the pattern above them */
       .pattern-extras {
         margin: 0.5rem 0 0 1rem;
         padding-left: 0.75rem;
         border-left: 2px solid var(--bs-border-color);
-      }
-      .spacer {
-        flex: 1;
       }
     `,
   ];
@@ -337,7 +315,7 @@ export class NfsbParam extends LitElement {
     const hasError = issues.some((issue) => issue.level === "error");
 
     return html`
-      <div class="param ${open ? "open" : ""}">
+      <div class="card param ${open ? "open" : ""}">
         <div class="row">
           <span
             class="grip"
@@ -357,7 +335,7 @@ export class NfsbParam extends LitElement {
             ${store.kind === "parameters"
               ? html`<nfsb-icon class="icon" name=${def.fa_icon || "far fa-circle"}></nfsb-icon>`
               : nothing}
-            <code class="name"><span class="align-items-center">${name}</span><small class="type">:${view.typeLabel}</small></code>
+            <code class="name text-truncate"><span>${name}</span><small>:${view.typeLabel}</small></code>
             <span class="description text-truncate">${def.description ? unsafeHTML(renderMarkdown(String(def.description))) : ""}</span>
             ${required ? html`<span class="badge badge-warning">required</span>` : nothing}
             ${def.hidden ? html`<span class="badge">hidden</span>` : nothing}
@@ -376,8 +354,8 @@ export class NfsbParam extends LitElement {
         ${open
           ? html`<div class="editor">
               ${issues.length
-                ? html`<ul class="alert alert-danger issues wide">
-                    ${issues.map((issue) => html`<li class=${issue.level}>${issue.message}</li>`)}
+                ? html`<ul class="alert alert-danger issues">
+                    ${issues.map((issue) => html`<li class=${issue.level === "warning" ? "text-warning" : ""}>${issue.message}</li>`)}
                   </ul>`
                 : nothing}
               ${this.jsonMode ? this.renderJson() : this.renderForm(view)} ${this.renderActions()}
@@ -706,7 +684,7 @@ export class NfsbParam extends LitElement {
   }
 
   private renderJson(): TemplateResult {
-    return html`<label class="wide">
+    return html`<label>
       <span class="form-label">Definition of <code>${this.param.name}</code> as JSON</span>
       <textarea
         class="form-control json ${this.jsonError ? "is-invalid" : ""}"
@@ -725,7 +703,7 @@ export class NfsbParam extends LitElement {
     const siblings = store.groups.find((group) => group.id === this.groupId)?.params.map((param) => param.name) ?? [];
     const index = siblings.indexOf(name);
     const otherGroups = store.groups.filter((group) => group.id !== this.groupId);
-    return html`<div class="actions wide">
+    return html`<div class="actions">
       <button
         class="btn btn-sm btn-outline-secondary"
         ?disabled=${index <= 0}
@@ -742,7 +720,7 @@ export class NfsbParam extends LitElement {
       </button>
       ${store.kind === "parameters" && otherGroups.length
         ? html`<select
-            class="form-select"
+            class="form-select form-select-sm"
             aria-label="Move to another group"
             @change=${(event: Event) => this.move(inputValue(event), "end")}
           >
@@ -752,7 +730,7 @@ export class NfsbParam extends LitElement {
             )}
           </select>`
         : nothing}
-      <span class="spacer"></span>
+      <span class="flex-grow-1"></span>
       <button
         class="btn btn-sm btn-outline-secondary ${this.jsonMode ? "active" : ""}"
         aria-pressed=${this.jsonMode}

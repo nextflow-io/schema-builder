@@ -24,7 +24,7 @@ export class NfsbRegexTester extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: 0.3rem;
-        font-size: 0.8125rem;
+        font-size: var(--nfsb-font-size-sm);
         white-space: nowrap;
       }
       .match {
@@ -49,7 +49,7 @@ export class NfsbRegexTester extends LitElement {
       .backdrop {
         position: absolute;
         inset: 0;
-        padding: 0.375rem 0.625rem;
+        padding: var(--nfsb-input-padding-y) var(--nfsb-input-padding-x);
         border: 1px solid transparent;
         line-height: 1.5;
         white-space: pre;

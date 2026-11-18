@@ -1,8 +1,8 @@
 import { createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import json from "shiki/langs/json.mjs";
-import githubDark from "shiki/themes/github-dark.mjs";
-import githubLight from "shiki/themes/github-light.mjs";
+import githubDark from "shiki/themes/github-dark-default.mjs";
+import githubLight from "shiki/themes/github-light-default.mjs";
 
 // Fine-grained bundle: only JSON and two themes, JS regex engine (no WASM), so it works offline.
 const highlighter = createHighlighterCoreSync({
@@ -18,7 +18,7 @@ const highlighter = createHighlighterCoreSync({
 export function highlightJson(code: string): string {
   return highlighter.codeToHtml(code, {
     lang: "json",
-    themes: { light: "github-light", dark: "github-dark" },
+    themes: { light: "github-light-default", dark: "github-dark-default" },
     defaultColor: false,
   });
 }

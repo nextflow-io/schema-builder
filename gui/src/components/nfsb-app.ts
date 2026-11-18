@@ -36,35 +36,35 @@ export class NfsbApp extends LitElement {
         background: var(--nfsb-navbar-bg);
         border-bottom: 3px solid var(--bs-primary);
       }
-      .navbar .btn-ghost,
+      .navbar .btn.text-body-secondary,
       .navbar .btn-outline-secondary {
         color: var(--nfsb-navbar-color);
         background: transparent;
-        border-color: rgb(255 255 255 / 25%);
+        border-color: rgb(248 249 250 / 25%);
       }
-      .navbar .btn-ghost {
+      .navbar .btn.text-body-secondary {
         border-color: transparent;
       }
-      .navbar .btn-ghost:hover:not(:disabled),
+      .navbar .btn.text-body-secondary:hover:not(:disabled),
       .navbar .btn-outline-secondary:hover:not(:disabled),
       .navbar .btn-outline-secondary.active {
-        background: rgb(255 255 255 / 15%);
+        background: rgb(248 249 250 / 15%);
       }
       .divider {
         width: 1px;
         align-self: stretch;
-        background: rgb(255 255 255 / 25%);
+        background: rgb(248 249 250 / 25%);
       }
       .navbar .status {
         max-width: 22rem;
         font-size: 0.8125rem;
-        color: rgb(255 255 255 / 70%);
+        color: rgb(248 249 250 / 70%);
       }
       .navbar .status.text-danger {
         color: #ff8f8a;
       }
       .navbar code {
-        color: rgb(255 255 255 / 75%);
+        color: rgb(248 249 250 / 75%);
       }
       .brand {
         display: flex;
@@ -397,7 +397,7 @@ export class NfsbApp extends LitElement {
       </div>
       ${this.renderStatus()}
       <button
-        class="btn btn-ghost btn-icon"
+        class="btn text-body-secondary btn-icon"
         title="Undo (${shortcut}Z)"
         aria-label="Undo"
         ?disabled=${!store.canUndo}
@@ -406,7 +406,7 @@ export class NfsbApp extends LitElement {
         <nfsb-icon name="rotate-left"></nfsb-icon>
       </button>
       <button
-        class="btn btn-ghost btn-icon"
+        class="btn text-body-secondary btn-icon"
         title="Redo (${isMac ? "⇧⌘Z" : "Ctrl+Shift+Z"})"
         aria-label="Redo"
         ?disabled=${!store.canRedo}
@@ -449,7 +449,7 @@ export class NfsbApp extends LitElement {
     const label = issue.param ?? store.groups.find((group) => group.id === issue.groupId)?.title ?? "";
     return html`<li>
       <button
-        class="btn btn-ghost issue"
+        class="btn text-body-secondary issue"
         ?disabled=${!issue.groupId}
         @click=${() => issue.groupId && this.reveal(issue.groupId, issue.param)}
       >
@@ -483,7 +483,7 @@ export class NfsbApp extends LitElement {
               ${store.groups.map(
                 (group) =>
                   html`<li>
-                    <button class="btn btn-ghost" @click=${() => this.reveal(group.id)}>
+                    <button class="btn text-body-secondary" @click=${() => this.reveal(group.id)}>
                       <nfsb-icon name=${group.id === ROOT ? "inbox" : group.icon || "far fa-folder"}></nfsb-icon>
                       <span class="label text-truncate">
                         ${group.id === ROOT ? "Without a group" : group.title || group.id}
@@ -493,7 +493,7 @@ export class NfsbApp extends LitElement {
                   </li>`,
               )}
               <li>
-                <button class="btn btn-ghost" @click=${this.addGroup}>
+                <button class="btn text-body-secondary" @click=${this.addGroup}>
                   <nfsb-icon name="plus"></nfsb-icon> <span class="label">Add group</span>
                 </button>
               </li>

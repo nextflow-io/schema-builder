@@ -71,7 +71,7 @@ export class NfsbGroup extends LitElement {
       .icon {
         margin-top: 0.1rem;
         font-size: 1.1rem;
-        color: var(--bs-primary-text-emphasis);
+        color: var(--bs-primary-text);
       }
       .titles {
         flex: 1;
@@ -208,7 +208,7 @@ export class NfsbGroup extends LitElement {
     const groupIds = store.groupIds;
     const index = groupIds.indexOf(group.id);
     const toggle = html`<button
-      class="btn btn-ghost btn-icon"
+      class="btn text-body-secondary btn-icon"
       aria-expanded=${!collapsed}
       aria-label=${collapsed ? "Expand" : "Collapse"}
       title=${collapsed ? "Expand" : "Collapse"}
@@ -248,7 +248,7 @@ export class NfsbGroup extends LitElement {
         <nfsb-icon name="grip-vertical"></nfsb-icon>
       </span>
       <button
-        class="btn btn-ghost btn-icon icon"
+        class="btn text-body-secondary btn-icon icon"
         title="Change the group's icon"
         aria-label="Change the group's icon"
         @click=${() => (this.picking = true)}
@@ -276,7 +276,7 @@ export class NfsbGroup extends LitElement {
       <div class="tools">
         <span class="badge">${group.params.length}</span>
         <button
-          class="btn btn-ghost btn-icon"
+          class="btn text-body-secondary btn-icon"
           title="Move group up"
           aria-label="Move group up"
           ?disabled=${index === 0}
@@ -285,7 +285,7 @@ export class NfsbGroup extends LitElement {
           <nfsb-icon name="arrow-up"></nfsb-icon>
         </button>
         <button
-          class="btn btn-ghost btn-icon"
+          class="btn text-body-secondary btn-icon"
           title="Move group down"
           aria-label="Move group down"
           ?disabled=${index === groupIds.length - 1}
@@ -294,7 +294,7 @@ export class NfsbGroup extends LitElement {
           <nfsb-icon name="arrow-down"></nfsb-icon>
         </button>
         <button
-          class="btn btn-ghost btn-icon"
+          class="btn text-body-secondary btn-icon"
           title="Delete this group. Its parameters are kept, without a group."
           aria-label="Delete group"
           @click=${this.delete_}

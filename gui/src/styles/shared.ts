@@ -53,7 +53,7 @@ export const shared = css`
     font-size: 0.875em;
   }
   .btn-primary {
-    color: #fff;
+    color: #f8f9fa;
     background: var(--bs-primary);
     border-color: var(--bs-primary);
   }
@@ -72,7 +72,7 @@ export const shared = css`
     background: var(--nfsb-surface);
   }
   .btn-outline-secondary:hover:not(:disabled),
-  .btn-ghost:hover:not(:disabled) {
+  .btn.text-body-secondary:hover:not(:disabled) {
     background: var(--bs-secondary-bg);
   }
   .btn-outline-secondary.active {
@@ -85,7 +85,7 @@ export const shared = css`
   .btn-outline-danger:hover:not(:disabled) {
     background: var(--bs-danger-bg-subtle);
   }
-  .btn-ghost {
+  .text-body-secondary {
     color: var(--bs-secondary-color);
   }
   .btn-icon {

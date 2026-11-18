@@ -29,7 +29,9 @@ import {
   updateParam,
   viewOf,
 } from "../model/schema";
+import { LiveFields } from "../live";
 import { StoreController, store } from "../store";
+import { ItemMotion, motion } from "../styles/motion";
 import { shared } from "../styles/shared";
 import "./nfsb-icon";
 import "./nfsb-icon-picker";
@@ -42,73 +44,14 @@ const FORMATS = [...PATH_FORMATS, "email", "uri", "date", "date-time"];
 export class NfsbParam extends LitElement {
   static styles = [
     shared,
+    motion,
     css`
       :host {
         display: block;
         position: relative;
       }
-      /* A just-added parameter grows out of the "Add" button below it (bottom left) */
-      :host([fresh]) {
-        transform-origin: 0 calc(100% + 1rem);
-        animation: nfsb-grow 0.36s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
-      }
-      @keyframes nfsb-grow {
-        from {
-          opacity: 0;
-          transform: scale(0.85);
-          clip-path: inset(calc(100% - 2rem) calc(100% - 8rem) 0 0 round var(--bs-border-radius));
-        }
-        60% {
-          opacity: 1;
-        }
-        to {
-          transform: none;
-          clip-path: inset(-0.5rem round var(--bs-border-radius));
-        }
-      }
-      /*
-       * A deleted parameter switches off like a CRT: top and bottom close in on a bright line, the
-       * line shrinks to a dot and fades, and the rows below slide up into the gap.
-       */
-      :host([removing]) {
-        pointer-events: none;
-        transform-origin: center;
-        animation: nfsb-crt-off 0.35s forwards;
-      }
-      @keyframes nfsb-crt-off {
-        0% {
-          transform: none;
-          filter: none;
-          margin-bottom: 0;
-          animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.4);
-        }
-        /* Collapsed to a ~2px line (--nfsb-line is 2px / the row's height, set when deletion starts) */
-        45% {
-          transform: scale(1, var(--nfsb-line, 0.02));
-          opacity: 1;
-          margin-bottom: 0;
-          animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.3);
-        }
-        /* The line shrinks to a dot */
-        80% {
-          transform: scale(0.01, var(--nfsb-line, 0.02));
-          opacity: 1;
-        }
-        100% {
-          transform: scale(0, var(--nfsb-line, 0.02));
-          opacity: 0;
-          /* --nfsb-height is set when the deletion starts; 0.5rem is the gap to the next row */
-          margin-bottom: calc(-1 * var(--nfsb-height, 0px) - 0.5rem);
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        :host([fresh]) {
-          animation: none;
-        }
-      }
       .param {
         border: 1px solid var(--bs-border-color);
-        border-radius: var(--bs-border-radius);
         background: var(--nfsb-surface);
       }
       .param.open {
@@ -160,11 +103,37 @@ export class NfsbParam extends LitElement {
       }
 
       .editor {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1rem;
+        border-top: 1px solid var(--bs-border-color);
+      }
+      /* The form is split into sections (basics, documentation, validation, ...), each a grid of fields */
+      .section-title {
+        margin: 0 0 0.75rem;
+        padding-bottom: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--bs-secondary-color);
+        border-bottom: 1px solid var(--bs-border-color);
+      }
+      .grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
         gap: 0.9rem 1rem;
-        padding: 1rem;
-        border-top: 1px solid var(--bs-border-color);
+      }
+      /* Help text and its rendered preview, side by side when there is room */
+      .help {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: 0.9rem 1rem;
+      }
+      .help textarea {
+        height: calc(100% - 1.5rem);
+        min-height: 6rem;
       }
       .wide {
         grid-column: 1 / -1;
@@ -183,11 +152,15 @@ export class NfsbParam extends LitElement {
         color: var(--bs-warning-text-emphasis);
       }
       .preview {
-        margin-top: 0.4rem;
-        padding: 0.5rem 0.75rem;
+        min-height: 6rem;
+        padding: 0.375rem 0.625rem;
         font-size: 0.875rem;
-        border-left: 3px solid var(--bs-border-color);
         background: var(--bs-tertiary-bg);
+        border-radius: var(--bs-border-radius);
+      }
+      .preview .empty {
+        margin: 0;
+        color: var(--bs-secondary-color);
       }
       .preview > :first-child {
         margin-top: 0;
@@ -222,6 +195,12 @@ export class NfsbParam extends LitElement {
         padding-bottom: 0.2rem;
         font-size: 0.875em;
       }
+      /* The empty-value option and the example tester belong to the pattern above them */
+      .pattern-extras {
+        margin: 0.5rem 0 0 1rem;
+        padding-left: 0.75rem;
+        border-left: 2px solid var(--bs-border-color);
+      }
       .spacer {
         flex: 1;
       }
@@ -232,15 +211,14 @@ export class NfsbParam extends LitElement {
   @property({ attribute: false }) param!: Param;
   /** Where a dragged parameter would be dropped, shown as a line. */
   @property({ reflect: true }) drop: "before" | "after" | null = null;
-  /** Just added: plays the grow-in animation. */
-  @property({ type: Boolean, reflect: true }) fresh = false;
-  /** Being deleted: plays the collapse animation, then removes the parameter. */
-  @property({ type: Boolean, reflect: true }) removing = false;
 
   @state() private jsonMode = false;
   @state() private jsonError: string | null = null;
   @state() private nameError: string | null = null;
   @state() private picking = false;
+
+  private readonly itemMotion = new ItemMotion(this, () => `param:${this.param.name}`);
+  private readonly live = new LiveFields(this, () => `param:${store.keyOf(this.param.name)}`);
 
   constructor() {
     super();
@@ -258,27 +236,33 @@ export class NfsbParam extends LitElement {
         store.commit(moveParam(store.schema, item.groupId, item.name, this.groupId, position));
       },
     });
-    this.addEventListener("animationend", (event) => {
-      if (event.animationName === "nfsb-crt-off") this.remove_();
-    });
   }
 
   // -- editing ---------------------------------------------------------------
 
-  private commit(def: ParamDef): void {
-    store.commit(updateParam(store.schema, this.groupId, this.param.name, def));
+  /** `edit`: the field being typed into, see `LiveFields`. */
+  private commit(def: ParamDef, edit?: string): void {
+    store.commit(updateParam(store.schema, this.groupId, this.param.name, def), undefined, edit);
   }
 
-  private set(key: string, value: unknown): void {
-    this.commit(setField(this.param.def, key, value));
+  private set(key: string, value: unknown, edit?: string): void {
+    this.commit(setField(this.param.def, key, value), edit);
   }
 
-  private rename(event: Event): void {
+  /** Rename as the name is typed, whenever it is valid. Leaving the field with an invalid name puts the old one back. */
+  private rename(text: string, edit: string, done: boolean): void {
     const from = this.param.name;
-    const to = inputValue(event).trim();
+    const to = text.trim();
     this.nameError = paramNameError(store.schema, to, from);
+    if (this.nameError && done) this.nameError = null;
     if (this.nameError || to === from) return;
-    store.commit(renameParam(store.schema, this.groupId, from, to), { from, to });
+    store.commit(renameParam(store.schema, this.groupId, from, to), { from, to }, edit);
+  }
+
+  /** A live text field (see `LiveFields`) for a keyword of the definition; `parse` turns the text into its value. */
+  private liveField(key: string, committed: string, parse: (text: string) => unknown) {
+    const on = this.live.on(key, (text, edit) => this.set(key, parse(text), edit));
+    return { value: this.live.value(key, committed), input: on.input, change: on.change };
   }
 
   private applyJson(event: Event): void {
@@ -291,21 +275,16 @@ export class NfsbParam extends LitElement {
     }
   }
 
-  /** Collapse the parameter, then delete it (straight away if the user prefers reduced motion). */
-  private delete_(): void {
-    if (this.removing) return;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      this.remove_();
-      return;
-    }
-    this.style.setProperty("--nfsb-height", `${this.offsetHeight}px`);
-    this.style.setProperty("--nfsb-line", `${2 / Math.max(this.offsetHeight, 2)}`);
-    this.removing = true;
+  /** Focus the name field in the (open) editor and select it, so typing replaces the name. */
+  async focusName(): Promise<void> {
+    await this.updateComplete;
+    const input = this.renderRoot.querySelector<HTMLInputElement>(".name-input");
+    input?.focus({ preventScroll: true });
+    input?.select();
   }
 
-  private remove_(): void {
-    this.removing = false;
-    store.commit(removeParam(store.schema, this.groupId, this.param.name));
+  private delete_(): void {
+    this.itemMotion.remove(() => store.commit(removeParam(store.schema, this.groupId, this.param.name)));
   }
 
   private move(toGroup: string, position: Position): void {
@@ -380,13 +359,15 @@ export class NfsbParam extends LitElement {
   }
 
   private text(label: string, key: string, options: { placeholder?: string; hint?: string; mono?: boolean } = {}) {
+    const field = this.liveField(key, String(this.param.def[key] ?? ""), (text) => text.trim());
     return html`<label>
       <span class="form-label">${label}</span>
       <input
         class="form-control ${options.mono ? "font-monospace" : ""}"
         placeholder=${options.placeholder ?? ""}
-        .value=${String(this.param.def[key] ?? "")}
-        @change=${(event: Event) => this.set(key, inputValue(event).trim())}
+        .value=${field.value}
+        @input=${field.input}
+        @change=${field.change}
       />
       ${options.hint ? html`<div class="form-text">${options.hint}</div>` : nothing}
     </label>`;
@@ -408,98 +389,138 @@ export class NfsbParam extends LitElement {
     const { name, def, required } = this.param;
     const noun = store.noun;
     const isParams = store.kind === "parameters";
+    const rename = this.live.on("name", (text, edit, done) => this.rename(text, edit, done));
+    const helpText = this.liveField("help_text", String(def.help_text ?? ""), (text) => text.trim());
     return html`
-      <label>
-        <span class="form-label">Name</span>
-        <input
-          class="form-control font-monospace ${this.nameError ? "is-invalid" : ""}"
-          .value=${name}
-          @change=${this.rename}
-        />
-        ${this.nameError ? html`<div class="invalid-feedback">${this.nameError}</div>` : nothing}
-      </label>
-      <label>
-        <span class="form-label">Type</span>
-        <select
-          class="form-select"
-          @change=${(event: Event) => this.commit(setType(def, inputValue(event) as ParamType))}
-        >
-          ${view.type === null ? html`<option selected disabled>${view.typeLabel}</option>` : nothing}
-          ${PARAM_TYPES.map((type) => html`<option value=${type} ?selected=${type === view.type}>${type}</option>`)}
-        </select>
-      </label>
-      <div class="checks">
-        ${this.check("Required", required, (checked) =>
-          store.commit(setRequired(store.schema, this.groupId, name, checked)),
-        )}
-        ${isParams
-          ? this.check(
-              "Hidden",
-              def.hidden === true,
-              (checked) => this.set("hidden", checked || undefined),
-              "Hidden parameters are left out of the help text and documentation unless asked for",
-            )
-          : nothing}
-        ${isParams
-          ? html`<button class="btn btn-sm btn-outline-secondary" @click=${() => (this.picking = true)}>
-              ${def.fa_icon ? html`<nfsb-icon name=${def.fa_icon}></nfsb-icon>` : nothing}
-              ${def.fa_icon ? "Change icon" : "Choose icon"}
-            </button>`
-          : nothing}
-      </div>
-
-      <div class="wide">
-        ${this.text("Description", "description", { placeholder: `A short description of this ${noun}` })}
-      </div>
-      ${isParams
-        ? html`<label class="wide">
-            <span class="form-label">Help text</span>
-            <textarea
-              class="form-control"
-              placeholder="Longer help, shown on request. Markdown is supported."
-              .value=${def.help_text ?? ""}
-              @change=${(event: Event) => this.set("help_text", inputValue(event).trim())}
-            ></textarea>
-            ${def.help_text
-              ? html`<div class="preview">${unsafeHTML(renderMarkdown(String(def.help_text)))}</div>`
+      ${this.section(
+        null,
+        html`<label>
+            <span class="form-label">Name</span>
+            <input
+              class="form-control font-monospace name-input ${this.nameError ? "is-invalid" : ""}"
+              .value=${this.live.value("name", name)}
+              @input=${rename.input}
+              @change=${rename.change}
+            />
+            ${this.nameError ? html`<div class="invalid-feedback">${this.nameError}</div>` : nothing}
+          </label>
+          <label>
+            <span class="form-label">Type</span>
+            <select
+              class="form-select"
+              @change=${(event: Event) => this.commit(setType(def, inputValue(event) as ParamType))}
+            >
+              ${view.type === null ? html`<option selected disabled>${view.typeLabel}</option>` : nothing}
+              ${PARAM_TYPES.map(
+                (type) => html`<option value=${type} ?selected=${type === view.type}>${type}</option>`,
+              )}
+            </select>
+          </label>
+          ${isParams
+            ? html`<div>
+                <span class="form-label">Icon</span>
+                <button class="btn btn-sm btn-outline-secondary" @click=${() => (this.picking = true)}>
+                  ${def.fa_icon ? html`<nfsb-icon name=${def.fa_icon}></nfsb-icon>` : nothing}
+                  ${def.fa_icon ? "Change icon" : "Choose icon"}
+                </button>
+              </div>`
+            : nothing}
+          <div class="checks">
+            ${this.check("Required", required, (checked) =>
+              store.commit(setRequired(store.schema, this.groupId, name, checked)),
+            )}
+            ${isParams
+              ? this.check(
+                  "Hidden",
+                  def.hidden === true,
+                  (checked) => this.set("hidden", checked || undefined),
+                  "Hidden parameters are left out of the help text and documentation unless asked for",
+                )
               : nothing}
-          </label>`
-        : nothing}
-      ${view.type === null
-        ? html`<div class="alert alert-info wide">
-            This ${noun} has a type the form cannot edit (<code>${view.typeLabel}</code>). Use “Edit as JSON” below to
-            change its constraints, or pick a simple type above to replace them.
-          </div>`
-        : this.renderConstraints(view.type, view)}
-      <div class="wide">
-        ${this.text("Error message", "errorMessage", { placeholder: "Shown when a value is not valid" })}
-      </div>
-      ${isParams ? nothing : this.renderSamplesheetFields()}
+          </div>`,
+      )}
+      ${this.section(
+        "Documentation",
+        html`<div class="wide">
+            ${this.text("Description", "description", { placeholder: `A short description of this ${noun}` })}
+          </div>
+          ${isParams
+            ? html`<div class="help wide">
+                <label>
+                  <span class="form-label">Help text</span>
+                  <textarea
+                    class="form-control"
+                    placeholder="Longer help, shown on request. Markdown is supported."
+                    .value=${helpText.value}
+                    @input=${helpText.input}
+                    @change=${helpText.change}
+                  ></textarea>
+                </label>
+                <div>
+                  <span class="form-label">Preview</span>
+                  <div class="preview">
+                    ${def.help_text
+                      ? unsafeHTML(renderMarkdown(String(def.help_text)))
+                      : html`<p class="empty">The help text, as it will be shown</p>`}
+                  </div>
+                </div>
+              </div>`
+            : nothing}`,
+      )}
+      ${this.section(
+        "Validation",
+        html`${view.type === null
+            ? html`<div class="alert alert-info wide">
+                This ${noun} has a type the form cannot edit (<code>${view.typeLabel}</code>). Use “Edit as JSON”
+                below to change its constraints, or pick a simple type above to replace them.
+              </div>`
+            : this.renderConstraints(view.type, view)}
+          <div class="wide">
+            ${this.text("Error message", "errorMessage", { placeholder: "Shown when a value is not valid" })}
+          </div>`,
+      )}
+      ${isParams ? nothing : this.section("Samplesheet", this.renderSamplesheetFields())}
     `;
+  }
+
+  /** A titled section of the form, laid out as a grid of fields. */
+  private section(title: string | null, fields: unknown): TemplateResult {
+    return html`<section>
+      ${title ? html`<h3 class="section-title">${title}</h3>` : nothing}
+      <div class="grid">${fields}</div>
+    </section>`;
   }
 
   private renderConstraints(type: ParamType, view: ParamView): TemplateResult {
     const { def } = this.param;
     const isNumber = type === "integer" || type === "number";
     const options: unknown[] | null = type === "boolean" ? [true, false] : Array.isArray(def.enum) ? def.enum : null;
-    const number = (label: string, key: string) =>
-      html`<label>
+    const toValue = (text: string) => coerce(text, type);
+    const number = (label: string, key: string) => {
+      const field = this.liveField(key, String(def[key] ?? ""), toValue);
+      return html`<label>
         <span class="form-label">${label}</span>
         <input
-          class="form-control"
+          class="form-control ${this.hasIssue(key) ? "is-invalid" : ""}"
           type="number"
           step=${type === "integer" ? "1" : "any"}
-          .value=${String(def[key] ?? "")}
-          @change=${(event: Event) => this.set(key, coerce(inputValue(event), type))}
+          .value=${field.value}
+          @input=${field.input}
+          @change=${field.change}
         />
       </label>`;
+    };
+    const defaultField = this.liveField("default", String(def.default ?? ""), toValue);
+    const enumField = this.liveField("enum", Array.isArray(def.enum) ? def.enum.join(", ") : "", (text) =>
+      parseList(text, type),
+    );
 
     return html`
       <label>
         <span class="form-label">Default</span>
         ${options
           ? html`<select
-              class="form-select"
+              class="form-select ${this.hasIssue("default") ? "is-invalid" : ""}"
               @change=${(event: Event) =>
                 this.set(
                   "default",
@@ -512,12 +533,13 @@ export class NfsbParam extends LitElement {
               )}
             </select>`
           : html`<input
-              class="form-control"
+              class="form-control ${this.hasIssue("default") ? "is-invalid" : ""}"
               type=${isNumber ? "number" : "text"}
               step=${type === "integer" ? "1" : "any"}
               placeholder="No default"
-              .value=${String(def.default ?? "")}
-              @change=${(event: Event) => this.set("default", coerce(inputValue(event), type))}
+              .value=${defaultField.value}
+              @input=${defaultField.input}
+              @change=${defaultField.change}
             />`}
       </label>
       ${type === "boolean"
@@ -525,21 +547,29 @@ export class NfsbParam extends LitElement {
         : html`<label>
             <span class="form-label">Allowed values</span>
             <input
-              class="form-control"
-              placeholder="Any value"
-              .value=${Array.isArray(def.enum) ? def.enum.join(", ") : ""}
-              @change=${(event: Event) => this.set("enum", parseList(inputValue(event), type))}
+              class="form-control ${this.hasIssue("enum") ? "is-invalid" : ""}"
+              placeholder="Any value (separate with commas)"
+              .value=${enumField.value}
+              @input=${enumField.input}
+              @change=${enumField.change}
             />
-            <div class="form-text">Separate values with commas</div>
           </label>`}
       ${isNumber ? html`${number("Minimum", "minimum")} ${number("Maximum", "maximum")}` : nothing}
       ${type === "string" ? this.renderStringFields(view) : nothing}
     `;
   }
 
+  /** Whether the linter found a problem with this keyword of the definition (see `Issue.fields`). */
+  private hasIssue(field: string): boolean {
+    return store.issuesOf(this.param.name).some((issue) => issue.fields?.includes(field));
+  }
+
   private renderStringFields(view: ParamView): TemplateResult {
     const { def } = this.param;
     const format = typeof def.format === "string" ? def.format : "";
+    const pattern = this.live.on("pattern", (text, edit) =>
+      this.commit(setPattern(this.param.def, text.trim(), viewOf(this.param.def).allowEmpty), edit),
+    );
     return html`
       <label>
         <span class="form-label">Format</span>
@@ -573,22 +603,24 @@ export class NfsbParam extends LitElement {
           <span class="form-label">Pattern</span>
           <input
             class="form-control font-monospace"
-            placeholder="Regular expression the value must match, e.g. ^\\S+\\.csv$"
-            .value=${view.pattern}
-            @change=${(event: Event) => this.commit(setPattern(def, inputValue(event).trim(), view.allowEmpty))}
+            placeholder="Regular expression, e.g. ^\\S+\\.csv$"
+            .value=${this.live.value("pattern", view.pattern)}
+            @input=${pattern.input}
+            @change=${pattern.change}
           />
         </label>
-        ${view.pattern
-          ? html`<nfsb-regex-tester .pattern=${view.pattern}></nfsb-regex-tester>
-              <div class="form-text">
-                ${this.check(
-                  "Also accept an empty value",
-                  view.allowEmpty,
-                  (checked) => this.commit(setPattern(def, view.pattern, checked)),
-                  "For optional values: written as anyOf [pattern, empty string] in the schema",
-                )}
-              </div>`
-          : nothing}
+        <div class="pattern-extras">
+          ${view.pattern
+            ? this.check(
+                "Also accept an empty value",
+                view.allowEmpty,
+                (checked) => this.commit(setPattern(def, view.pattern, checked)),
+                "For optional values: written as anyOf [pattern, empty string] in the schema",
+              )
+            : nothing}
+          <!-- Always there, so the example survives clearing the pattern (and can be typed first) -->
+          <nfsb-regex-tester .pattern=${view.pattern}></nfsb-regex-tester>
+        </div>
       </div>
     `;
   }
@@ -596,14 +628,20 @@ export class NfsbParam extends LitElement {
   private renderSamplesheetFields(): TemplateResult {
     const { def } = this.param;
     const uniqueWith: string[] = Array.isArray(def.unique) ? def.unique : [];
+    const meta = this.liveField("meta", Array.isArray(def.meta) ? def.meta.join(", ") : "", (text) => parseList(text));
+    const unique = this.liveField("unique", uniqueWith.join(", "), (text) => {
+      const columns = parseList(text);
+      return columns.length ? columns : true;
+    });
     return html`
       <label>
         <span class="form-label">Meta map keys</span>
         <input
           class="form-control font-monospace"
           placeholder="Not added to the meta map"
-          .value=${Array.isArray(def.meta) ? def.meta.join(", ") : ""}
-          @change=${(event: Event) => this.set("meta", parseList(inputValue(event)))}
+          .value=${meta.value}
+          @input=${meta.input}
+          @change=${meta.change}
         />
         <div class="form-text">Store this column in the sample's meta map under these keys</div>
       </label>
@@ -618,11 +656,9 @@ export class NfsbParam extends LitElement {
                 class="form-control font-monospace"
                 aria-label="Columns this column must be unique in combination with"
                 placeholder="On its own"
-                .value=${uniqueWith.join(", ")}
-                @change=${(event: Event) => {
-                  const columns = parseList(inputValue(event));
-                  this.set("unique", columns.length ? columns : true);
-                }}
+                .value=${unique.value}
+                @input=${unique.input}
+                @change=${unique.change}
               />
               <div class="form-text">…or only in combination with these columns</div>`
           : nothing}

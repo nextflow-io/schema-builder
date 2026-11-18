@@ -28,8 +28,13 @@ class Store extends EventTarget {
   readonly expanded = new Set<string>();
   /** Ids of the groups that are folded away. */
   readonly collapsedGroups = new Set<string>();
+  /** Render keys of parameters and groups, by name or id (see `keyOf`). */
+  private readonly keys = new Map<string, number>();
+  private nextKey = 0;
 
   private past: Schema[] = [];
+  /** The field being typed into (see `LiveFields`): its commits replace each other in the undo history. */
+  private editing: string | null = null;
   private future: Schema[] = [];
   private savedSchema: Schema = {};
   private derivedFrom: Schema | null = null;
@@ -45,6 +50,7 @@ class Store extends EventTarget {
     const ids = new Set(this.groups.map((group) => group.id));
     for (const name of this.expanded) if (!names.has(name)) this.expanded.delete(name);
     for (const id of this.collapsedGroups) if (!ids.has(id)) this.collapsedGroups.delete(id);
+    for (const key of this.keys.keys()) if (!names.has(key) && !ids.has(key)) this.keys.delete(key);
     this.changed();
   }
 
@@ -77,6 +83,15 @@ class Store extends EventTarget {
   issuesOf(param: string): Issue[] {
     return this.derive().issues.get(param) ?? [];
   }
+  /**
+   * A key for rendering the parameter or group with this name or id in a list. It survives renames, so renaming
+   * keeps the element (and the focus inside it) instead of replacing it.
+   */
+  keyOf(name: string): number {
+    let key = this.keys.get(name);
+    if (key === undefined) this.keys.set(name, (key = this.nextKey++));
+    return key;
+  }
   /** What one entry of this kind of schema is called. */
   get noun(): "parameter" | "column" {
     return this.kind === "samplesheet" ? "column" : "parameter";
@@ -98,21 +113,34 @@ class Store extends EventTarget {
   /**
    * Replace the schema with an edited version, remembering the old one for undo.
    * Pass `renamed` when the edit renamed a parameter or a group, so that it
-   * stays open or collapsed under its new name.
+   * stays open or collapsed under its new name. Commits with the same `edit`
+   * key (a field being typed into) are one undo step, until `endEdit`.
    */
-  commit(next: Schema, renamed?: { from: string; to: string }): void {
+  commit(next: Schema, renamed?: { from: string; to: string }, edit?: string): void {
     if (next === this.schema) return;
     if (renamed) {
       for (const set of [this.expanded, this.collapsedGroups]) if (set.delete(renamed.from)) set.add(renamed.to);
+      const key = this.keys.get(renamed.from);
+      this.keys.delete(renamed.from);
+      if (key !== undefined) this.keys.set(renamed.to, key);
     }
-    this.past.push(this.schema);
-    if (this.past.length > HISTORY_LIMIT) this.past.shift();
+    if (!edit || edit !== this.editing) {
+      this.past.push(this.schema);
+      if (this.past.length > HISTORY_LIMIT) this.past.shift();
+    }
+    this.editing = edit ?? null;
     this.future = [];
     this.schema = next;
     this.schemaChanged();
   }
 
+  /** Finish the undo step of the field being typed into: the next commit is a new step. */
+  endEdit(): void {
+    this.editing = null;
+  }
+
   undo(): void {
+    this.editing = null;
     const previous = this.past.pop();
     if (!previous) return;
     this.future.push(this.schema);
@@ -121,6 +149,7 @@ class Store extends EventTarget {
   }
 
   redo(): void {
+    this.editing = null;
     const next = this.future.pop();
     if (!next) return;
     this.past.push(this.schema);
@@ -140,6 +169,7 @@ class Store extends EventTarget {
     this.name = name;
     this.past = [];
     this.future = [];
+    this.editing = null;
     this.expanded.clear();
     this.collapsedGroups.clear();
     this.filter = "";

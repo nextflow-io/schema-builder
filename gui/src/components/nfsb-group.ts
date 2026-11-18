@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { dropEdge, endDrag, listenForDrops, startDrag } from "../dnd";
-import { inputValue, matchesQuery } from "../dom";
+import { matchesQuery } from "../dom";
 import {
   type Group,
   ROOT,
@@ -12,10 +12,13 @@ import {
   removeGroup,
   updateGroup,
 } from "../model/schema";
+import { LiveFields } from "../live";
 import { StoreController, store } from "../store";
+import { ItemMotion, markAdded, motion } from "../styles/motion";
 import { shared } from "../styles/shared";
 import "./nfsb-icon";
 import "./nfsb-icon-picker";
+import type { NfsbParam } from "./nfsb-param";
 import "./nfsb-param";
 
 /**
@@ -26,6 +29,7 @@ import "./nfsb-param";
 export class NfsbGroup extends LitElement {
   static styles = [
     shared,
+    motion,
     css`
       :host {
         display: block;
@@ -127,8 +131,9 @@ export class NfsbGroup extends LitElement {
   /** Where a dragged group ("before"/"after") or parameter ("into") would be dropped. */
   @property({ reflect: true }) drop: "before" | "after" | "into" | null = null;
   @state() private picking = false;
-  /** The parameter just added with the "Add" button, which animates in. */
-  @state() private added: string | null = null;
+
+  private readonly itemMotion = new ItemMotion(this, () => `group:${this.group.id}`);
+  private readonly live = new LiveFields(this, () => `group:${store.keyOf(this.group.id)}`);
 
   constructor() {
     super();
@@ -156,8 +161,11 @@ export class NfsbGroup extends LitElement {
     return this.group.id === ROOT;
   }
 
-  /** Unfold the group and scroll to it, or to one of its parameters with its editor open. */
-  async reveal(name?: string): Promise<void> {
+  /**
+   * Unfold the group and scroll to it, or to one of its parameters with its editor open. Returns that parameter's
+   * element.
+   */
+  async reveal(name?: string): Promise<NfsbParam | undefined> {
     store.view(() => {
       store.collapsedGroups.delete(this.group.id);
       if (name) store.expanded.add(name);
@@ -167,20 +175,29 @@ export class NfsbGroup extends LitElement {
       ? [...this.renderRoot.querySelectorAll("nfsb-param")].find((element) => element.param.name === name)
       : null;
     (target ?? this).scrollIntoView({ behavior: "smooth", block: name ? "center" : "start" });
+    return target ?? undefined;
   }
 
-  private update_(patch: { title?: string; description?: string; fa_icon?: string }): void {
+  /** `edit`: the field being typed into, see `LiveFields`. */
+  private update_(patch: { title?: string; description?: string; fa_icon?: string }, edit?: string): void {
     const { schema, id } = updateGroup(store.schema, this.group.id, patch);
     // The group's key follows its title
-    store.commit(schema, id === this.group.id ? undefined : { from: this.group.id, to: id });
+    store.commit(schema, id === this.group.id ? undefined : { from: this.group.id, to: id }, edit);
+  }
+
+  private delete_(): void {
+    this.itemMotion.remove(() => store.commit(removeGroup(store.schema, this.group.id)));
   }
 
   private add(): void {
     const { schema, name } = addParam(store.schema, this.group.id);
     store.filter = "";
-    this.added = name;
+    // Only the new parameter's editor stays open. The others' edits are already committed: clicking "Add" blurred
+    // any focused field, which fires its change event.
+    store.expanded.clear();
+    markAdded(`param:${name}`);
     store.commit(schema);
-    void this.reveal(name);
+    void this.reveal(name).then((param) => param?.focusName());
   }
 
   // -- rendering -------------------------------------------------------------
@@ -215,6 +232,10 @@ export class NfsbGroup extends LitElement {
       </header>`;
     }
 
+    const title = this.live.on("title", (text, edit) => this.update_({ title: text.trim() }, edit));
+    const description = this.live.on("description", (text, edit) =>
+      this.update_({ description: text.trim() }, edit),
+    );
     return html`<header>
       <span
         class="grip"
@@ -239,15 +260,17 @@ export class NfsbGroup extends LitElement {
           class="form-control title"
           aria-label="Group title"
           placeholder="Group title"
-          .value=${group.title}
-          @change=${(event: Event) => this.update_({ title: inputValue(event).trim() })}
+          .value=${this.live.value("title", group.title)}
+          @input=${title.input}
+          @change=${title.change}
         />
         <input
           class="form-control description"
           aria-label="Group description"
           placeholder="Describe this group of parameters"
-          .value=${group.description}
-          @change=${(event: Event) => this.update_({ description: inputValue(event).trim() })}
+          .value=${this.live.value("description", group.description)}
+          @input=${description.input}
+          @change=${description.change}
         />
       </div>
       <div class="tools">
@@ -274,7 +297,7 @@ export class NfsbGroup extends LitElement {
           class="btn btn-ghost btn-icon"
           title="Delete this group. Its parameters are kept, without a group."
           aria-label="Delete group"
-          @click=${() => store.commit(removeGroup(store.schema, group.id))}
+          @click=${this.delete_}
         >
           <nfsb-icon name="trash"></nfsb-icon>
         </button>
@@ -303,16 +326,8 @@ export class NfsbGroup extends LitElement {
           : html`<div class="body">
               ${repeat(
                 params,
-                (param) => param.name,
-                (param) =>
-                  html`<nfsb-param
-                    .groupId=${group.id}
-                    .param=${param}
-                    ?fresh=${param.name === this.added}
-                    @animationend=${(event: AnimationEvent) => {
-                      if (event.animationName === "nfsb-grow") this.added = null;
-                    }}
-                  ></nfsb-param>`,
+                (param) => store.keyOf(param.name),
+                (param) => html`<nfsb-param .groupId=${group.id} .param=${param}></nfsb-param>`,
               )}
               ${params.length === 0
                 ? html`<div class="empty">

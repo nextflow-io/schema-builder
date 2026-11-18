@@ -5,7 +5,9 @@ import { errorMessage, inputValue, isTextField } from "../dom";
 import type { Issue } from "../model/lint";
 import { ROOT, addGroup, parseJsonObject, updateMeta } from "../model/schema";
 import { parametersTemplate, samplesheetTemplate } from "../model/templates";
+import { LiveFields } from "../live";
 import { StoreController, store } from "../store";
+import { markAdded } from "../styles/motion";
 import { shared } from "../styles/shared";
 import "./nfsb-group";
 import "./nfsb-icon";
@@ -215,6 +217,8 @@ export class NfsbApp extends LitElement {
   @state() private showJson = false;
   @state() private openError: string | null = null;
 
+  private readonly live = new LiveFields(this, () => "schema");
+
   constructor() {
     super();
     new StoreController(this);
@@ -278,6 +282,7 @@ export class NfsbApp extends LitElement {
 
   private addGroup(): void {
     const { schema, id } = addGroup(store.schema);
+    markAdded(`group:${id}`);
     store.commit(schema);
     void this.reveal(id);
   }
@@ -320,7 +325,7 @@ export class NfsbApp extends LitElement {
                 ${this.renderDetails()}
                 ${repeat(
                   store.groups,
-                  (group) => group.id,
+                  (group) => store.keyOf(group.id),
                   (group) => html`<nfsb-group .group=${group}></nfsb-group>`,
                 )}
                 ${store.kind === "parameters"
@@ -507,16 +512,21 @@ export class NfsbApp extends LitElement {
   }
 
   private renderDetails() {
-    const field = (label: string, key: string, placeholder: string, mono = false) =>
-      html`<label class=${key === "description" ? "wide" : ""}>
+    const field = (label: string, key: string, placeholder: string, mono = false) => {
+      const on = this.live.on(key, (text, edit) =>
+        store.commit(updateMeta(store.schema, { [key]: text.trim() }), undefined, edit),
+      );
+      return html`<label class=${key === "description" ? "wide" : ""}>
         <span class="form-label">${label}</span>
         <input
           class="form-control ${mono ? "font-monospace" : ""}"
           placeholder=${placeholder}
-          .value=${String(store.schema[key] ?? "")}
-          @change=${(event: Event) => store.commit(updateMeta(store.schema, { [key]: inputValue(event).trim() }))}
+          .value=${this.live.value(key, String(store.schema[key] ?? ""))}
+          @input=${on.input}
+          @change=${on.change}
         />
       </label>`;
+    };
     return html`<section class="card details" aria-label="Schema details">
       ${field("Title", "title", store.kind === "parameters" ? "e.g. nf-core/rnaseq pipeline parameters" : "Title")}
       ${field("$id", "$id", "URL where this schema will be published", true)}

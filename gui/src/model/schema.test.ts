@@ -322,7 +322,13 @@ describe("lint", () => {
     expect(lint(params())).toEqual([]);
     expect(lint(samplesheet).filter((issue) => issue.level === "error")).toEqual([
       // `"default": "1"` on an integer column: a genuine mistake in the example
-      { level: "error", message: "The default is not of type integer", groupId: ROOT, param: "status" },
+      {
+        level: "error",
+        message: "The default is not of type integer",
+        groupId: ROOT,
+        param: "status",
+        fields: ["default"],
+      },
     ]);
   });
 
@@ -339,6 +345,17 @@ describe("lint", () => {
       "The default is above the maximum",
     ]);
     expect(messages({ type: "boolean", default: "true" })).toEqual(["The default is not of type boolean"]);
+  });
+
+  it("names the fields of a problem", () => {
+    const fields = (def: object) => lintParam(def).map((issue) => issue.fields);
+    expect(fields({ type: "string", pattern: "^a", enum: ["a", "b"] })).toEqual([["enum"]]);
+    expect(fields({ type: "string", pattern: "^a", default: "b" })).toEqual([["default"]]);
+    expect(fields({ type: "integer", minimum: 5, maximum: 1, default: 3 })).toEqual([
+      ["minimum", "maximum"],
+      ["default"],
+      ["default"],
+    ]);
   });
 
   it("finds duplicate parameters and missing titles", () => {

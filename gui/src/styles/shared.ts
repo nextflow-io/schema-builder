@@ -119,7 +119,8 @@ export const shared = css`
     min-height: 5rem;
     resize: vertical;
   }
-  .form-control.is-invalid {
+  .form-control.is-invalid,
+  .form-select.is-invalid {
     border-color: var(--bs-danger);
   }
   .form-text {

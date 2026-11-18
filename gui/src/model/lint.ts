@@ -8,6 +8,8 @@ export interface Issue {
   /** Where the problem is; absent for problems with the schema as a whole. */
   groupId?: string;
   param?: string;
+  /** The keywords of the parameter's definition the problem is about, to mark their fields in the editor. */
+  fields?: string[];
 }
 
 function hasType(value: unknown, type: ParamType): boolean {
@@ -25,8 +27,8 @@ export function compile(pattern: string): RegExp | null {
 }
 
 /** Problems with a single parameter definition. */
-export function lintParam(def: ParamDef): Pick<Issue, "level" | "message">[] {
-  const issues: Pick<Issue, "level" | "message">[] = [];
+export function lintParam(def: ParamDef): Pick<Issue, "level" | "message" | "fields">[] {
+  const issues: Pick<Issue, "level" | "message" | "fields">[] = [];
   const { type, pattern } = viewOf(def);
   const regex = pattern ? compile(pattern) : null;
 
@@ -34,27 +36,27 @@ export function lintParam(def: ParamDef): Pick<Issue, "level" | "message">[] {
 
   if (def.default !== undefined && type) {
     if (!hasType(def.default, type)) {
-      issues.push({ level: "error", message: `The default is not of type ${type}` });
+      issues.push({ level: "error", message: `The default is not of type ${type}`, fields: ["default"] });
     } else if (Array.isArray(def.enum) && !def.enum.includes(def.default)) {
-      issues.push({ level: "error", message: "The default is not one of the allowed values" });
+      issues.push({ level: "error", message: "The default is not one of the allowed values", fields: ["default"] });
     } else if (regex && typeof def.default === "string" && def.default && !regex.test(def.default)) {
-      issues.push({ level: "error", message: "The default does not match the pattern" });
+      issues.push({ level: "error", message: "The default does not match the pattern", fields: ["default"] });
     }
   }
 
   if (typeof def.minimum === "number" && typeof def.maximum === "number" && def.minimum > def.maximum) {
-    issues.push({ level: "error", message: "The minimum is larger than the maximum" });
+    issues.push({ level: "error", message: "The minimum is larger than the maximum", fields: ["minimum", "maximum"] });
   }
   if (typeof def.default === "number") {
     if (typeof def.minimum === "number" && def.default < def.minimum) {
-      issues.push({ level: "error", message: "The default is below the minimum" });
+      issues.push({ level: "error", message: "The default is below the minimum", fields: ["default"] });
     }
     if (typeof def.maximum === "number" && def.default > def.maximum) {
-      issues.push({ level: "error", message: "The default is above the maximum" });
+      issues.push({ level: "error", message: "The default is above the maximum", fields: ["default"] });
     }
   }
   if (regex && Array.isArray(def.enum) && def.enum.some((value) => typeof value === "string" && !regex.test(value))) {
-    issues.push({ level: "warning", message: "Some allowed values do not match the pattern" });
+    issues.push({ level: "warning", message: "Some allowed values do not match the pattern", fields: ["enum"] });
   }
   return issues;
 }

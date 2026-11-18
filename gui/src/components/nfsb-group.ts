@@ -228,7 +228,7 @@ export class NfsbGroup extends LitElement {
               : "Drag these into a group, or use “Move to group” in a parameter's editor."}
           </p>
         </div>
-        <div class="tools"><span class="badge">${group.params.length}</span> ${toggle}</div>
+        <div class="tools"> ${toggle}</div>
       </header>`;
     }
 

@@ -23,6 +23,8 @@ export class NfsbApp extends LitElement {
       :host {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
+        /* an explicit column, so no single wide child can stretch the app past the viewport */
+        grid-template-columns: minmax(0, 1fr);
         height: 100dvh;
       }
 
@@ -68,10 +70,14 @@ export class NfsbApp extends LitElement {
       }
       .brand {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 0.6rem;
+        gap: 0.25rem 0.6rem;
         min-width: 0;
         margin-right: auto;
+      }
+      .brand code {
+        min-width: 0;
       }
       .brand strong {
         font-family: var(--nfsb-font-heading);
@@ -130,6 +136,29 @@ export class NfsbApp extends LitElement {
         }
         .sidebar,
         .json {
+          display: none;
+        }
+        .brand .badge {
+          display: none;
+        }
+        /* icon-only navbar buttons; the label stays as the accessible name (same as .visually-hidden) */
+        .navbar .btn {
+          padding-inline: 0.5rem;
+        }
+        .navbar .btn .label {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+          white-space: nowrap;
+        }
+        /* no room for side by side: the JSON toggle swaps the editor for the preview */
+        .layout.with-json .json {
+          display: flex;
+          border-left: 0;
+        }
+        .layout.with-json main {
           display: none;
         }
       }
@@ -417,10 +446,11 @@ export class NfsbApp extends LitElement {
       </button>
       <button
         class="btn btn-outline-secondary ${this.showJson ? "active" : ""}"
+        title="JSON preview"
         aria-pressed=${this.showJson}
         @click=${() => (this.showJson = !this.showJson)}
       >
-        <nfsb-icon name="code"></nfsb-icon> JSON
+        <nfsb-icon name="code"></nfsb-icon><span class="label">JSON</span>
       </button>
       <span class="divider"></span>
       ${store.connected
@@ -430,7 +460,7 @@ export class NfsbApp extends LitElement {
               ?disabled=${store.saving || !store.dirty}
               @click=${this.save}
             >
-              <nfsb-icon name="floppy-disk"></nfsb-icon> Save
+              <nfsb-icon name="floppy-disk"></nfsb-icon><span class="label">Save</span>
             </button>
             <button
               class="btn btn-primary"
@@ -438,10 +468,10 @@ export class NfsbApp extends LitElement {
               ?disabled=${store.saving}
               @click=${this.finish}
             >
-              <nfsb-icon name="check"></nfsb-icon> Finish
+              <nfsb-icon name="check"></nfsb-icon><span class="label">Finish</span>
             </button>`
         : html`<button class="btn btn-primary" title="Download (${shortcut}S)" @click=${this.save}>
-            <nfsb-icon name="download"></nfsb-icon> Download
+            <nfsb-icon name="download"></nfsb-icon><span class="label">Download</span>
           </button>`}
     </header>`;
   }

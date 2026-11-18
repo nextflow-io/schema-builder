@@ -87,8 +87,16 @@ export class NfsbParam extends LitElement {
         text-box: trim-both cap alphabetic;
       }
       .name {
-        padding: 0.1rem 0.4rem;
+        /* on narrow screens the name gives way (ellipsis) before the badges are pushed out of the row */
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding: 0.25em 0.4rem;
         font-family: var(--bs-font-monospace);
+        /* the ellipsis takes this colour, so keep it muted like the type it usually cuts off */
+        color: var(--bs-secondary-color);
+      }
+      .name > span {
         color: var(--bs-primary);
       }
       .type {

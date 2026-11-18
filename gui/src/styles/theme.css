@@ -36,6 +36,8 @@
   --nfsb-font-heading: "Maven Pro Variable", "Maven Pro", var(--bs-font-sans-serif);
   --nfsb-navbar-bg: #212529;
   --nfsb-navbar-color: #f8f9fa;
+  /* Chevron of .form-select (Bootstrap's icon, $gray-800) */
+  --bs-form-select-bg-img: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +50,7 @@
     --bs-border-color: #495057;
     /* nf-co.re's darker dark-mode green ($nf-core-color-dark) */
     --bs-primary: #1a9655;
+    --bs-form-select-bg-img: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23dee2e6' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
     --bs-primary-rgb: 26, 150, 85;
     --bs-primary-text-emphasis: #7acea1;
     --bs-primary-bg-subtle: #072314;

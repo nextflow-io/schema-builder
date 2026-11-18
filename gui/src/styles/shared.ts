@@ -119,6 +119,19 @@ export const shared = css`
     min-height: 5rem;
     resize: vertical;
   }
+  .form-select {
+    appearance: none;
+    padding-right: 2.25rem;
+    background-image: var(--bs-form-select-bg-img);
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+  }
+  .form-select[multiple],
+  .form-select[size]:not([size="1"]) {
+    padding-right: 0.625rem;
+    background-image: none;
+  }
   .form-control.is-invalid,
   .form-select.is-invalid {
     border-color: var(--bs-danger);

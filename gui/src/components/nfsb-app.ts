@@ -23,7 +23,7 @@ export class NfsbApp extends LitElement {
       :host {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr);
-        height: 100vh;
+        height: 100dvh;
       }
 
       .navbar {
@@ -89,7 +89,7 @@ export class NfsbApp extends LitElement {
         min-height: 0;
       }
       .layout.with-json {
-        grid-template-columns: 17rem minmax(0, 1fr) minmax(18rem, 30%);
+        grid-template-columns: 17rem minmax(0, 1fr) minmax(18rem, 50%);
       }
       .sidebar,
       .json {
@@ -387,13 +387,14 @@ export class NfsbApp extends LitElement {
   }
 
   private renderNavbar() {
-    const isMac = navigator.platform.startsWith("Mac");
+    // Only picks the shortcut labels; navigator.platform is deprecated and userAgentData is Chromium-only
+    const isMac = /Mac|iPhone|iPad/.test(navigator.userAgent);
     const shortcut = isMac ? "⌘" : "Ctrl+";
     return html`<header class="navbar">
       <div class="brand">
 <strong><span>nf-</span>schema-builder</strong>
         ${store.name ? html`<code class="text-truncate">${store.name}</code>` : nothing}
-        <span class="badge badge-primary">${store.kind === "samplesheet" ? "Samplesheet" : "Pipeline parameters"}</span>
+        <span class="badge badge-primary">${store.kind === "samplesheet" ? "Samplesheet schema" : "Pipeline parameters schema"}</span>
       </div>
       ${this.renderStatus()}
       <button
@@ -406,7 +407,7 @@ export class NfsbApp extends LitElement {
         <nfsb-icon name="rotate-left"></nfsb-icon>
       </button>
       <button
-        class="btn text-body-secondary btn-icon"
+        class="btn text-body-primary btn-icon"
         title="Redo (${isMac ? "⇧⌘Z" : "Ctrl+Shift+Z"})"
         aria-label="Redo"
         ?disabled=${!store.canRedo}

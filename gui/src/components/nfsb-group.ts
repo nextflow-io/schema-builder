@@ -274,7 +274,6 @@ export class NfsbGroup extends LitElement {
         />
       </div>
       <div class="tools">
-        <span class="badge">${group.params.length}</span>
         <button
           class="btn text-body-secondary btn-icon"
           title="Move group up"

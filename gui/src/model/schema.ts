@@ -373,7 +373,7 @@ export function viewOf(def: ParamDef): ParamView {
     return { type: def.type, typeLabel: def.type, pattern, allowEmpty: false };
   }
   const typeLabel = Array.isArray(def.type)
-    ? def.type.join(" | ")
+    ? def.type.join("|")
     : typeof def.type === "string"
       ? def.type
       : (["anyOf", "oneOf", "allOf", "$ref"].find((keyword) => keyword in def) ?? "any");

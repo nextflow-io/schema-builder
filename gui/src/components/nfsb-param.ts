@@ -72,6 +72,8 @@ export class NfsbParam extends LitElement {
         min-width: 0;
         justify-content: flex-start;
         gap: 0.6rem;
+        /* The trimmed text below is shorter than its line box; keep the row height it had */
+        min-height: 2.75rem;
         padding: 0.5rem 0.75rem 0.5rem 0.25rem;
         font-weight: 400;
         text-align: left;
@@ -79,23 +81,49 @@ export class NfsbParam extends LitElement {
       .summary .icon {
         color: var(--bs-secondary-color);
       }
+      /* Trim the font's leading so the text centres on its letters, not its line box, next to the icons */
+      .name,
+      .description {
+        text-box: trim-both cap alphabetic;
+      }
       .name {
         padding: 0.1rem 0.4rem;
         font-family: var(--bs-font-monospace);
-        font-size: 0.875em;
-        color: var(--bs-body-color);
-        background: var(--bs-tertiary-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: var(--bs-border-radius);
+        color: var(--bs-primary);
       }
       .type {
         font-family: var(--bs-font-monospace);
-        font-size: 0.8125em;
         color: var(--bs-secondary-color);
       }
       .description {
         flex: 1;
         min-width: 0;
+        /* Room for descenders, which the truncation would otherwise clip */
+        padding-block: 0.25em;
+      }
+      .description > p {
+        display: inline;
+        margin: 0;
+      }
+      /* With an icon (parameter schemas), the icon button sits in front of the name input and the label and error
+         line up with the input; without one (samplesheets), the field is a plain stack */
+      .name-field:has(> .icon-button) {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        column-gap: 0.5rem;
+      }
+      .name-field:has(> .icon-button) > * {
+        grid-column: 2;
+      }
+      .name-field > .icon-label,
+      .name-field > .icon-button {
+        grid-column: 1;
+      }
+      .name-field > .icon-button {
+        grid-row: 2;
+        justify-self: center;
+        font-size: 1.1rem;
       }
       .chevron {
         font-size: 0.75em;
@@ -321,12 +349,12 @@ export class NfsbParam extends LitElement {
             ${store.kind === "parameters"
               ? html`<nfsb-icon class="icon" name=${def.fa_icon || "far fa-circle"}></nfsb-icon>`
               : nothing}
-            <code class="name">${store.kind === "parameters" ? "--" : ""}${name}</code>
-            <span class="description text-truncate">${def.description ?? ""}</span>
+            <code class="name"><span class="align-items-center">${name}</span><small class="type">:${view.typeLabel}</small></code>
+            <span class="description text-truncate">${def.description ? unsafeHTML(renderMarkdown(String(def.description))) : ""}</span>
             ${required ? html`<span class="badge badge-warning">required</span>` : nothing}
             ${def.hidden ? html`<span class="badge">hidden</span>` : nothing}
             ${Array.isArray(def.meta) ? html`<span class="badge badge-info">meta</span>` : nothing}
-            <span class="type">${view.typeLabel}</span>
+
             ${issues.length
               ? html`<nfsb-icon
                   class=${hasError ? "text-danger" : "text-warning"}
@@ -394,16 +422,28 @@ export class NfsbParam extends LitElement {
     return html`
       ${this.section(
         null,
-        html`<label>
-            <span class="form-label">Name</span>
+        html`<div class="name-field">
+            ${isParams ? html`<span class="form-label icon-label">Icon</span>` : nothing}
+            <label class="form-label" for="name">Name</label>
+            ${isParams
+              ? html`<button
+                  class="btn text-body-secondary btn-icon icon-button"
+                  title="Change the ${noun}'s icon"
+                  aria-label="Change the ${noun}'s icon"
+                  @click=${() => (this.picking = true)}
+                >
+                  <nfsb-icon name=${def.fa_icon || "far fa-circle"}></nfsb-icon>
+                </button>`
+              : nothing}
             <input
+              id="name"
               class="form-control font-monospace name-input ${this.nameError ? "is-invalid" : ""}"
               .value=${this.live.value("name", name)}
               @input=${rename.input}
               @change=${rename.change}
             />
             ${this.nameError ? html`<div class="invalid-feedback">${this.nameError}</div>` : nothing}
-          </label>
+          </div>
           <label>
             <span class="form-label">Type</span>
             <select
@@ -416,15 +456,6 @@ export class NfsbParam extends LitElement {
               )}
             </select>
           </label>
-          ${isParams
-            ? html`<div>
-                <span class="form-label">Icon</span>
-                <button class="btn btn-sm btn-outline-secondary" @click=${() => (this.picking = true)}>
-                  ${def.fa_icon ? html`<nfsb-icon name=${def.fa_icon}></nfsb-icon>` : nothing}
-                  ${def.fa_icon ? "Change icon" : "Choose icon"}
-                </button>
-              </div>`
-            : nothing}
           <div class="checks">
             ${this.check("Required", required, (checked) =>
               store.commit(setRequired(store.schema, this.groupId, name, checked)),

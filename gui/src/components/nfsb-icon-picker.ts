@@ -26,7 +26,12 @@ export class NfsbIconPicker extends LitElement {
         border-radius: var(--bs-border-radius-lg);
         box-shadow: var(--bs-box-shadow);
       }
+      dialog:modal {
+        overscroll-behavior: contain;
+      }
       dialog::backdrop {
+        overflow: hidden;
+        overscroll-behavior: contain;
         background: rgb(0 0 0 / 40%);
       }
       header {
@@ -89,7 +94,7 @@ export class NfsbIconPicker extends LitElement {
   render() {
     const matches = this.icons.filter((icon) => matchesQuery(icon.keywords, this.search));
     return html`
-      <dialog @close=${() => this.dispatchEvent(new Event("close"))} aria-label="Choose an icon">
+      <dialog closedby="any" @close=${() => this.dispatchEvent(new Event("close"))} aria-label="Choose an icon">
         <header>
           <input
             class="form-control"
